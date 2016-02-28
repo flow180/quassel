@@ -47,6 +47,13 @@ if(HAVE_SSL)
   include_directories(${OPENSSL_INCLUDE_DIR})
 endif(HAVE_SSL)
 
+if (QCA2_FOUND)
+    add_definitions(-DHAVE_QCA2)
+    include_directories(${QCA2_INCLUDE_DIR})
+    list(APPEND SOURCES cipher.cpp)
+    list(APPEND LIBS ${QCA2_LIBRARIES})
+endif()
+
 if(HAVE_LDAP)
   set(SOURCES ${SOURCES} ldapstorage.cpp sqliteldapstorage.cpp postgresqlldapstorage.cpp)
   set(MOC_HDRS ${MOC_HDRS} ldapstorage.h sqliteldapstorage.h postgresqlldapstorage.h)

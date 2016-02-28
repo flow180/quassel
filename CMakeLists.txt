@@ -10,9 +10,9 @@ project(QuasselIRC)
 
 # Versions
 set(QUASSEL_MAJOR  0)
-set(QUASSEL_MINOR 13)
-set(QUASSEL_PATCH  0)
-set(QUASSEL_VERSION_STRING "0.13-pre")
+set(QUASSEL_MINOR 12)
+set(QUASSEL_PATCH  3)
+set(QUASSEL_VERSION_STRING "0.12.3")
 
 # We want to know CMake's version for debug reasons
 message(STATUS "Using CMake ${CMAKE_VERSION}")
@@ -275,22 +275,17 @@ if (USE_QT5)
 
         if (ECM_FOUND)
             list(APPEND CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
-            if (WITH_KDE)
-                find_package(KF5 COMPONENTS ConfigWidgets CoreAddons Notifications NotifyConfig TextWidgets WidgetsAddons XmlGui QUIET)
-                set_package_properties(KF5 PROPERTIES TYPE REQUIRED
-                    URL "http://www.kde.org"
-                    DESCRIPTION "KDE Frameworks"
-                    PURPOSE     "Required for integration into the Plasma desktop"
-                )
-            else(WITH_KDE)
-                find_package(KF5Sonnet QUIET)
-                set_package_properties(KF5Sonnet PROPERTIES TYPE RECOMMENDED
-                    URL "http://api.kde.org/frameworks-api/frameworks5-apidocs/sonnet/html"
-                    DESCRIPTION "framework for providing spell-checking capabilities"
-                    PURPOSE "Enables spell-checking support in input widgets"
-                )
-            endif(WITH_KDE)
-        endif(ECM_FOUND)
+        endif()
+
+        if (WITH_KDE)
+            find_package(KF5 COMPONENTS ConfigWidgets CoreAddons Notifications NotifyConfig TextWidgets WidgetsAddons XmlGui QUIET)
+            set_package_properties(KF5 PROPERTIES TYPE REQUIRED
+                URL "http://www.kde.org"
+                DESCRIPTION "KDE Frameworks"
+                PURPOSE     "Required for integration into the Plasma desktop"
+            )
+
+        endif()
 
     endif(BUILD_GUI)
 
@@ -610,6 +605,8 @@ add_subdirectory(icons)
 add_subdirectory(pics)
 add_subdirectory(po)
 
+find_package(Ldap)
+set(HAVE_LDAP true)
 
 # Set up and display feature summary
 #####################################################################
