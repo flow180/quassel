@@ -35,8 +35,10 @@ Cipher::~Cipher()
 
 bool Cipher::setKey(QByteArray key)
 {
-    if (key.isEmpty())
+    if (key.isEmpty()) {
+        m_key.clear();
         return false;
+    }
 
     if (key.mid(0, 4).toLower() == "ecb:")
     {
@@ -168,6 +170,13 @@ QByteArray Cipher::initKeyExchange()
 QByteArray Cipher::parseInitKeyX(QByteArray key)
 {
     QCA::Initializer init;
+    bool isCBC = false;
+
+    if (key.endsWith(" CBC"))
+    {
+        isCBC = true;
+        key.chop(4);
+    }
 
     if (key.length() != 181)
         return QByteArray();
@@ -195,6 +204,9 @@ QByteArray Cipher::parseInitKeyX(QByteArray key)
 
     //remove trailing = because mircryption and fish think it's a swell idea.
     while (sharedKey.endsWith('=')) sharedKey.chop(1);
+
+    if (isCBC)
+        sharedKey.prepend("cbc:");
 
     bool success = setKey(sharedKey);
 
@@ -352,6 +364,10 @@ QByteArray Cipher::blowfishECB(QByteArray cipherText, bool direction)
     }
     else
     {
+        // ECB Blowfish encodes in blocks of 12 chars, so anything else is malformed input
+        if ((temp.length() % 12) != 0)
+            return cipherText;
+
         temp = b64ToByte(temp);
         while ((temp.length() % 8) != 0) temp.append('\0');
     }
@@ -364,8 +380,13 @@ QByteArray Cipher::blowfishECB(QByteArray cipherText, bool direction)
     if (!cipher.ok())
         return cipherText;
 
-    if (direction)
+    if (direction) {
+        // Sanity check
+        if ((temp2.length() % 8) != 0)
+            return cipherText;
+
         temp2 = byteToB64(temp2);
+    }
 
     return temp2;
 }
@@ -408,13 +429,13 @@ QByteArray Cipher::byteToB64(QByteArray text)
         right += v;
 
         for (int i = 0; i < 6; i++) {
-            encoded.append(base64.at(right & 0x3F).toAscii());
+            encoded.append(base64.at(right & 0x3F).toLatin1());
             right = right >> 6;
         }
 
-        //TODO make sure the .toascii doesn't break anything
+        //TODO make sure the .toLatin1 doesn't break anything
         for (int i = 0; i < 6; i++) {
-            encoded.append(base64.at(left & 0x3F).toAscii());
+            encoded.append(base64.at(left & 0x3F).toLatin1());
             left = left >> 6;
         }
     }
@@ -471,6 +492,5 @@ bool Cipher::neededFeaturesAvailable()
     if (QCA::isSupported("blowfish-ecb") && QCA::isSupported("blowfish-cbc") && QCA::isSupported("dh"))
         return true;
 
-    qWarning() << "QCA provider plugin not found. It is usually provided by the qca-ossl plugin.";
     return false;
 }

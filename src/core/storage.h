@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -40,6 +40,13 @@ public:
         IsReady,    // ready to go
         NeedsSetup, // need basic setup (ask the user for input)
         NotAvailable // remove the storage backend from the list of avaliable backends
+    };
+
+    enum HashVersion {
+        Sha1,
+        Sha2_512,
+        Latest=Sha2_512
+        
     };
 
 public slots:
@@ -408,10 +415,16 @@ signals:
     void userRemoved(UserId);
 
 protected:
-    //! when implementing a storage handler, use this method to crypt user passwords.
-    /**  This guarantees compatibility with other storage handlers and allows easy migration
-     */
-    QString cryptedPassword(const QString &password);
+    QString hashPassword(const QString &password);
+    bool checkHashedPassword(const UserId user, const QString &password, const QString &hashedPassword, const Storage::HashVersion version);
+
+private:
+    QString hashPasswordSha1(const QString &password);
+    bool checkHashedPasswordSha1(const QString &password, const QString &hashedPassword);
+
+    QString hashPasswordSha2_512(const QString &password);
+    bool checkHashedPasswordSha2_512(const QString &password, const QString &hashedPassword);
+    QString sha2_512(const QString &input);
 };
 
 

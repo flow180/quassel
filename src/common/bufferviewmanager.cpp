@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -88,7 +88,7 @@ QVariantList BufferViewManager::initBufferViewIds() const
     BufferViewConfigHash::const_iterator iterEnd = _bufferViewConfigs.constEnd();
     while (iter != iterEnd) {
         bufferViewIds << (*iter)->bufferViewId();
-        iter++;
+        ++iter;
     }
     return bufferViewIds;
 }
@@ -100,6 +100,6 @@ void BufferViewManager::initSetBufferViewIds(const QVariantList bufferViewIds)
     QVariantList::const_iterator iterEnd = bufferViewIds.constEnd();
     while (iter != iterEnd) {
         newBufferViewConfig((*iter).value<int>());
-        iter++;
+        ++iter;
     }
 }

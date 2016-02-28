@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -77,7 +77,7 @@ void Logger::log()
             prio = LOG_INFO;
             break;
         }
-        syslog(LOG_USER & prio, "%s", qPrintable(_buffer));
+        syslog(prio|LOG_USER, "%s", qPrintable(_buffer));
     }
 #endif
 
@@ -97,6 +97,7 @@ void Logger::log()
 }
 
 
+#if QT_VERSION < 0x050000
 void Logger::logMessage(QtMsgType type, const char *msg)
 {
     switch (type) {
@@ -115,3 +116,30 @@ void Logger::logMessage(QtMsgType type, const char *msg)
         return;
     }
 }
+#else
+void Logger::logMessage(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    Q_UNUSED(context)
+
+    switch (type) {
+    case QtDebugMsg:
+        Logger(Quassel::DebugLevel) << msg.toLocal8Bit().constData();
+        break;
+#if QT_VERSION >= 0x050500
+    case QtInfoMsg:
+        Logger(Quassel::InfoLevel) << msg.toLocal8Bit().constData();
+        break;
+#endif
+    case QtWarningMsg:
+        Logger(Quassel::WarningLevel) << msg.toLocal8Bit().constData();
+        break;
+    case QtCriticalMsg:
+        Logger(Quassel::ErrorLevel) << msg.toLocal8Bit().constData();
+        break;
+    case QtFatalMsg:
+        Logger(Quassel::ErrorLevel) << msg.toLocal8Bit().constData();
+        Quassel::logFatalMessage(msg.toLocal8Bit().constData());
+        return;
+    }
+}
+#endif

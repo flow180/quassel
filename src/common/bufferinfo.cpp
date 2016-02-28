@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -59,6 +59,14 @@ QString BufferInfo::bufferName() const
         return _bufferName;
     else
         return nickFromMask(_bufferName);  // FIXME get rid of global functions and use the Network stuff instead!
+}
+
+
+bool BufferInfo::acceptsRegularMessages() const
+{
+    if(_type == StatusBuffer || _type == InvalidBuffer)
+        return false;
+    return true;
 }
 
 

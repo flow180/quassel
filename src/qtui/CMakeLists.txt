@@ -1,21 +1,5 @@
 # Builds the qtui module
 
-set(_modules )
-
-if(WITH_QT5)
-  list(APPEND _modules Widgets)
-endif(WITH_QT5)
-
-if(HAVE_DBUS)
-  list(APPEND _modules DBus)
-endif(HAVE_DBUS)
-
-if(HAVE_WEBKIT)
-  list(APPEND _modules Webkit XmlPatterns)
-endif(HAVE_WEBKIT)
-
-setup_qt_variables(Gui Network ${_modules})
-
 set(SOURCES
     aboutdlg.cpp
     awaylogfilter.cpp
@@ -50,11 +34,13 @@ set(SOURCES
     markerlineitem.cpp
     msgprocessorstatuswidget.cpp
     nicklistwidget.cpp
+    passwordchangedlg.cpp
     qtui.cpp
     qtuiapplication.cpp
     qtuimessageprocessor.cpp
     qtuisettings.cpp
     qtuistyle.cpp
+    receivefiledlg.cpp
     settingsdlg.cpp
     settingspagedlg.cpp
     simplenetworkeditor.cpp
@@ -64,59 +50,8 @@ set(SOURCES
     titlesetter.cpp
     topicwidget.cpp
     verticaldock.cpp
-    webpreviewitem.cpp)
-
-set(MOC_HDRS
-    aboutdlg.h
-    awaylogfilter.h
-    awaylogview.h
-    bufferwidget.h
-    channellistdlg.h
-    chatitem.h
-    chatlinemodel.h
-    chatmonitorfilter.h
-    chatmonitorview.h
-    chatscene.h
-    chatview.h
-    chatviewsearchbar.h
-    chatviewsearchcontroller.h
-    columnhandleitem.h
-    coreconfigwizard.h
-    coreconnectdlg.h
-    coreconnectionstatuswidget.h
-    coreinfodlg.h
-    debugbufferviewoverlay.h
-    debugconsole.h
-    debuglogwidget.h
-    debugmessagemodelfilter.h
-    inputwidget.h
-    ircconnectionwizard.h
-    legacysystemtray.h
-    mainpage.h
-    mainwin.h
-    markerlineitem.h
-    msgprocessorstatuswidget.h
-    nicklistwidget.h
-    qtui.h
-    qtuiapplication.h
-    qtuimessageprocessor.h
-    qtuistyle.h
-    settingsdlg.h
-    settingspagedlg.h
-    simplenetworkeditor.h
-    systemtray.h
-    systraynotificationbackend.h
-    taskbarnotificationbackend.h
-    titlesetter.h
-    topicwidget.h
-    verticaldock.h)
-
-set(HEADERS
-    chatline.h
-    chatlinemodelitem.h
-    chatviewsettings.h
-    qtuisettings.h
-    webpreviewitem.h)
+    webpreviewitem.cpp
+)
 
 set(FORMS
     aboutdlg.ui
@@ -137,68 +72,103 @@ set(FORMS
     inputwidget.ui
     msgprocessorstatuswidget.ui
     nicklistwidget.ui
+    passwordchangedlg.ui
     settingsdlg.ui
     settingspagedlg.ui
     simplenetworkeditor.ui
-    topicwidget.ui)
+    receivefiledlg.ui
+    topicwidget.ui
+)
 
-if(HAVE_KDE)
-  set(SOURCES ${SOURCES} knotificationbackend.cpp)
-  set(MOC_HDRS ${MOC_HDRS} knotificationbackend.h)
-else(HAVE_KDE)
-  if(HAVE_PHONON)
-    set(SOURCES ${SOURCES} phononnotificationbackend.cpp)
-    set(MOC_HDRS ${MOC_HDRS} phononnotificationbackend.h)
-    set(FORMS ${FORMS} phononnotificationconfigwidget.ui)
+set(LIBS )
+set(QT_MODULES )
+
+if (WITH_KDE4)
+    add_definitions(-DHAVE_KDE ${KDE4_DEFINITIONS})
+    include_directories(${KDE4_INCLUDES})
+    list(APPEND SOURCES knotificationbackend.cpp)
+    list(APPEND LIBS ${KDE4_KDECORE_LIBS} ${KDE4_KDEUI_LIBRARY} ${KDE4_KNOTIFYCONFIG_LIBRARY})
+endif()
+
+if (WITH_KF5)
+    list(APPEND SOURCES knotificationbackend.cpp)
+    list(APPEND LIBS KF5::ConfigWidgets KF5::Notifications KF5::NotifyConfig KF5::WidgetsAddons KF5::XmlGui)
+endif()
+
+if (LibsnoreQt5_FOUND)
+    add_definitions(-DHAVE_LIBSNORE)
+    list(APPEND SOURCES snorenotificationbackend.cpp)
+    list(APPEND FORMS   snorentificationconfigwidget.ui)
+    list(APPEND LIBS    Snore::Libsnore Snore::LibsnoreSettings)
+endif()
+
+if (PHONON_FOUND OR Phonon4Qt5_FOUND)
+    add_definitions(-DHAVE_PHONON)
     include_directories(${PHONON_INCLUDES})
-  endif(HAVE_PHONON)
-endif(HAVE_KDE)
+    set(SOURCES ${SOURCES} phononnotificationbackend.cpp)
+    set(FORMS ${FORMS}     phononnotificationconfigwidget.ui)
+    list(APPEND LIBS ${PHONON_LIBS})  # PHONON_LIBRARIES only exists in config mode, it's not set by the legacy FindPhonon.cmake
+endif()
 
-if(HAVE_DBUS)
-  set(SOURCES ${SOURCES} statusnotifieritem.cpp statusnotifieritemdbus.cpp)
-  set(MOC_HDRS ${MOC_HDRS} statusnotifieritem.h statusnotifieritemdbus.h)
-  set(FORMS ${FORMS})
-  if(WITH_QT5)
-    qt5_add_dbus_interface(DBUS ../../interfaces/org.kde.StatusNotifierWatcher.xml statusnotifierwatcher)
-    qt5_add_dbus_interface(DBUS ../../interfaces/org.freedesktop.Notifications.xml notificationsclient)
-    qt5_add_dbus_adaptor(DBUS ../../interfaces/org.kde.StatusNotifierItem.xml statusnotifieritemdbus.h StatusNotifierItemDBus)
-  else(WITH_QT5)
-    qt4_add_dbus_interface(DBUS ../../interfaces/org.kde.StatusNotifierWatcher.xml statusnotifierwatcher)
-    qt4_add_dbus_interface(DBUS ../../interfaces/org.freedesktop.Notifications.xml notificationsclient)
-    qt4_add_dbus_adaptor(DBUS ../../interfaces/org.kde.StatusNotifierItem.xml statusnotifieritemdbus.h StatusNotifierItemDBus)
-  endif(WITH_QT5)
-endif(HAVE_DBUS)
+if (QT_QTDBUS_FOUND OR Qt5DBus_FOUND)
+    add_definitions(-DHAVE_DBUS)
+    list(APPEND QT_MODULES DBus)
+    if (dbusmenu-qt_FOUND OR dbusmenu-qt5_FOUND)
+        add_definitions(-DHAVE_DBUSMENU)
+        include_directories(${dbusmenu-qt_INCLUDE_DIRS} ${dbusmenu-qt5_INCLUDE_DIRS})
+        if (dbusmenu-qt_FOUND)
+            list(APPEND LIBS dbusmenu-qt)
+        else()
+            list(APPEND LIBS dbusmenu-qt5)
+        endif()
+    endif()
+
+    list(APPEND SOURCES statusnotifieritem.cpp statusnotifieritemdbus.cpp dockmanagernotificationbackend.cpp)
+    qt_add_dbus_interface(SOURCES ../../interfaces/org.kde.StatusNotifierWatcher.xml statusnotifierwatcher)
+    qt_add_dbus_interface(SOURCES ../../interfaces/org.freedesktop.Notifications.xml notificationsclient)
+    qt_add_dbus_adaptor  (SOURCES ../../interfaces/org.kde.StatusNotifierItem.xml statusnotifieritemdbus.h StatusNotifierItemDBus)
+endif()
+
+if (HAVE_WEBKIT)
+    add_definitions(-DHAVE_WEBKIT)
+    list(APPEND QT_MODULES WebKit)
+    if (USE_QT5)
+        list(APPEND QT_MODULES WebKitWidgets)
+    endif()
+endif()
 
 if(HAVE_SSL)
   set(SOURCES ${SOURCES} sslinfodlg.cpp)
-  set(MOC_HDRS ${MOC_HDRS} sslinfodlg.h)
   set(FORMS ${FORMS} sslinfodlg.ui)
 endif(HAVE_SSL)
 
-if(INDICATEQT_FOUND)
-  set(SOURCES ${SOURCES} indicatornotificationbackend.cpp)
-  set(MOC_HDRS ${MOC_HDRS} indicatornotificationbackend.h)
-  set(FORMS ${FORMS} indicatornotificationconfigwidget.ui)
-  include_directories(${INDICATEQT_INCLUDE_DIRS})
-endif(INDICATEQT_FOUND)
+if (INDICATEQT_FOUND)
+    add_definitions(-DHAVE_INDICATEQT)
+    include_directories(${INDICATEQT_INCLUDE_DIRS})
+    list(APPEND SOURCES indicatornotificationbackend.cpp)
+    list(APPEND FORMS   indicatornotificationconfigwidget.ui)
+    list(APPEND LIBS ${INDICATEQT_LIBRARIES})
+endif()
+
+if (WITH_NOTIFICATION_CENTER)
+    add_definitions(-DHAVE_NOTIFICATION_CENTER)
+    list(APPEND SOURCES osxnotificationbackend.mm)
+    list(APPEND LIBS "/System/Library/Frameworks/Foundation.framework")
+endif()
 
 foreach(FORM ${FORMS})
   set(FORMPATH ${FORMPATH} ui/${FORM})
 endforeach(FORM ${FORMS})
 
 # handle settingspages
-include(settingspages/settingspages.inc)
+include(settingspages/settingspages.cmake)
 foreach(SP ${SETTINGSPAGES})
   set(SPSRC ${SPSRC} settingspages/${SP}settingspage.cpp)
-  set(SPHDR ${SPHDR} settingspages/${SP}settingspage.h)
   set(SPFRM ${SPFRM} settingspages/${SP}settingspage.ui)
 endforeach(SP ${SETTINGSPAGES})
 foreach(SRC ${SP_SOURCES})
   set(SPSRC ${SPSRC} settingspages/${SRC})
 endforeach(SRC ${SP_SOURCES})
-foreach(HDR ${SP_HEADERS})
-  set(SPHDR ${SPHDR} settingspages/${HDR})
-endforeach(HDR ${SP_HEADERS})
 foreach(FRM ${SP_FORMS})
   set(SPFRM ${SPFRM} settingspages/${FRM})
 endforeach(FRM ${SP_FORMS})
@@ -208,16 +178,16 @@ include_directories(${CMAKE_SOURCE_DIR}/src/common
                     ${CMAKE_SOURCE_DIR}/src/qtui
                     ${CMAKE_SOURCE_DIR}/src/qtui/settingspages
                     ${CMAKE_SOURCE_DIR}/src/uisupport
-                    ${CMAKE_CURRENT_BINARY_DIR}
-                    ${QUASSEL_QT_INCLUDES})
+)
 
-if(WITH_QT5)
-  qt5_wrap_ui(UI ${FORMPATH} ${SPFRM})
-else(WITH_QT5)
-  qt4_wrap_cpp(MOC ${MOC_HDRS} ${SPHDR})
-  qt4_wrap_ui(UI ${FORMPATH} ${SPFRM})
-endif(WITH_QT5)
+qt_wrap_ui(UI ${FORMPATH} ${SPFRM})
 
-add_library(mod_qtui STATIC ${SOURCES} ${SPSRC} ${MOC} ${DBUS} ${UI} ${HEADERS})
-add_dependencies(mod_qtui mod_common mod_client mod_uisupport)
-set_target_properties(mod_qtui PROPERTIES COMPILE_FLAGS "${QUASSEL_QT_COMPILEFLAGS}")
+if (USE_QT5)
+    list(APPEND QT_MODULES Widgets)
+endif()
+
+
+add_library(mod_qtui STATIC ${SOURCES} ${SPSRC} ${UI})
+qt_use_modules(mod_qtui Core Gui Network ${QT_MODULES})
+
+target_link_libraries(mod_qtui mod_client mod_common mod_uisupport ${LIBS})

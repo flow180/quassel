@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -37,7 +37,7 @@ CoreBufferViewManager::CoreBufferViewManager(SignalProxy *proxy, CoreSession *pa
     while (iter != iterEnd) {
         config = new CoreBufferViewConfig(iter.key().toInt(), iter.value().toMap(), this);
         addBufferViewConfig(config);
-        iter++;
+        ++iter;
     }
 }
 
@@ -50,7 +50,7 @@ void CoreBufferViewManager::saveBufferViews()
     BufferViewConfigHash::const_iterator iterEnd = bufferViewConfigHash().constEnd();
     while (iter != iterEnd) {
         views[QString::number((*iter)->bufferViewId())] = (*iter)->toVariantMap();
-        iter++;
+        ++iter;
     }
 
     Core::setUserSetting(_coreSession->user(), "BufferViews", views);
@@ -70,7 +70,7 @@ void CoreBufferViewManager::requestCreateBufferView(const QVariantMap &propertie
         if ((*iter)->bufferViewId() > maxId)
             maxId = (*iter)->bufferViewId();
 
-        iter++;
+        ++iter;
     }
     maxId++;
 
@@ -85,7 +85,7 @@ void CoreBufferViewManager::requestCreateBufferViews(const QVariantList &propert
     QVariantList::const_iterator iterEnd = properties.constEnd();
     while (iter != iterEnd) {
         requestCreateBufferView((*iter).toMap());
-        iter++;
+        ++iter;
     }
 }
 

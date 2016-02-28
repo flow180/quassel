@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,9 +20,11 @@
 
 #include "ctcpparser.h"
 
+#include "corenetworkconfig.h"
 #include "coresession.h"
 #include "ctcpevent.h"
 #include "messageevent.h"
+#include "coreuserinputhandler.h"
 
 const QByteArray XDELIM = "\001";
 
@@ -36,11 +38,21 @@ CtcpParser::CtcpParser(CoreSession *coreSession, QObject *parent)
     _ctcpMDequoteHash[MQUOTE + 'r'] = QByteArray(1, '\r');
     _ctcpMDequoteHash[MQUOTE + MQUOTE] = MQUOTE;
 
-    QByteArray XQUOTE = QByteArray("\134");
-    _ctcpXDelimDequoteHash[XQUOTE + XQUOTE] = XQUOTE;
-    _ctcpXDelimDequoteHash[XQUOTE + QByteArray("a")] = XDELIM;
+    setStandardCtcp(_coreSession->networkConfig()->standardCtcp());
 
+    connect(_coreSession->networkConfig(), SIGNAL(standardCtcpSet(bool)), this, SLOT(setStandardCtcp(bool)));
     connect(this, SIGNAL(newEvent(Event *)), _coreSession->eventManager(), SLOT(postEvent(Event *)));
+}
+
+
+void CtcpParser::setStandardCtcp(bool enabled)
+{
+    QByteArray XQUOTE = QByteArray("\134");
+    if (enabled)
+        _ctcpXDelimDequoteHash[XQUOTE + XQUOTE] = XQUOTE;
+    else
+        _ctcpXDelimDequoteHash.remove(XQUOTE + XQUOTE);
+    _ctcpXDelimDequoteHash[XQUOTE + QByteArray("a")] = XDELIM;
 }
 
 
@@ -69,7 +81,7 @@ QByteArray CtcpParser::lowLevelQuote(const QByteArray &message)
     QHash<QByteArray, QByteArray>::const_iterator quoteIter = quoteHash.constBegin();
     while (quoteIter != quoteHash.constEnd()) {
         quotedMessage.replace(quoteIter.value(), quoteIter.key());
-        quoteIter++;
+        ++quoteIter;
     }
     return quotedMessage;
 }
@@ -105,7 +117,7 @@ QByteArray CtcpParser::xdelimQuote(const QByteArray &message)
     QHash<QByteArray, QByteArray>::const_iterator quoteIter = _ctcpXDelimDequoteHash.constBegin();
     while (quoteIter != _ctcpXDelimDequoteHash.constEnd()) {
         quotedMessage.replace(quoteIter.value(), quoteIter.key());
-        quoteIter++;
+        ++quoteIter;
     }
     return quotedMessage;
 }
@@ -148,8 +160,6 @@ void CtcpParser::processIrcEventRawPrivmsg(IrcEventRawMessage *event)
 
 void CtcpParser::parse(IrcEventRawMessage *e, Message::Type messagetype)
 {
-    QByteArray ctcp;
-
     //lowlevel message dequote
     QByteArray dequotedMessage = lowLevelDequote(e->rawMessage());
 
@@ -160,6 +170,53 @@ void CtcpParser::parse(IrcEventRawMessage *e, Message::Type messagetype)
     Message::Flags flags = (ctcptype == CtcpEvent::Reply && !e->network()->isChannelName(e->target()))
                            ? Message::Redirected
                            : Message::None;
+
+    if (coreSession()->networkConfig()->standardCtcp())
+        parseStandard(e, messagetype, dequotedMessage, ctcptype, flags);
+    else
+        parseSimple(e, messagetype, dequotedMessage, ctcptype, flags);
+}
+
+
+// only accept CTCPs in their simplest form, i.e. one ctcp, from start to
+// end, no text around it; not as per the 'specs', but makes people happier
+void CtcpParser::parseSimple(IrcEventRawMessage *e, Message::Type messagetype, QByteArray dequotedMessage, CtcpEvent::CtcpType ctcptype, Message::Flags flags)
+{
+    if (dequotedMessage.count(XDELIM) != 2 || dequotedMessage[0] != '\001' || dequotedMessage[dequotedMessage.count() -1] != '\001') {
+        displayMsg(e, messagetype, targetDecode(e, dequotedMessage), e->prefix(), e->target(), flags);
+    } else {
+        int spacePos;
+        QString ctcpcmd, ctcpparam;
+
+        QByteArray ctcp = xdelimDequote(dequotedMessage.mid(1, dequotedMessage.count() - 2));
+        spacePos = ctcp.indexOf(' ');
+        if (spacePos != -1) {
+            ctcpcmd = targetDecode(e, ctcp.left(spacePos));
+            ctcpparam = targetDecode(e, ctcp.mid(spacePos + 1));
+        } else {
+            ctcpcmd = targetDecode(e, ctcp);
+            ctcpparam = QString();
+        }
+        ctcpcmd = ctcpcmd.toUpper();
+
+        // we don't want to block /me messages by the CTCP ignore list
+        if (ctcpcmd == QLatin1String("ACTION") || !coreSession()->ignoreListManager()->ctcpMatch(e->prefix(), e->network()->networkName(), ctcpcmd)) {
+            QUuid uuid = QUuid::createUuid();
+            _replies.insert(uuid, CtcpReply(coreNetwork(e), nickFromMask(e->prefix())));
+            CtcpEvent *event = new CtcpEvent(EventManager::CtcpEvent, e->network(), e->prefix(), e->target(),
+                ctcptype, ctcpcmd, ctcpparam, e->timestamp(), uuid);
+            emit newEvent(event);
+            CtcpEvent *flushEvent = new CtcpEvent(EventManager::CtcpEventFlush, e->network(), e->prefix(), e->target(),
+                ctcptype, "INVALID", QString(), e->timestamp(), uuid);
+            emit newEvent(flushEvent);
+        }
+    }
+}
+
+
+void CtcpParser::parseStandard(IrcEventRawMessage *e, Message::Type messagetype, QByteArray dequotedMessage, CtcpEvent::CtcpType ctcptype, Message::Flags flags)
+{
+    QByteArray ctcp;
 
     QList<CtcpEvent *> ctcpEvents;
     QUuid uuid; // needed to group all replies together
@@ -255,9 +312,13 @@ QByteArray CtcpParser::pack(const QByteArray &ctcpTag, const QByteArray &message
 
 void CtcpParser::query(CoreNetwork *net, const QString &bufname, const QString &ctcpTag, const QString &message)
 {
-    QList<QByteArray> params;
-    params << net->serverEncode(bufname) << lowLevelQuote(pack(net->serverEncode(ctcpTag), net->userEncode(bufname, message)));
-    net->putCmd("PRIVMSG", params);
+    QString cmd("PRIVMSG");
+
+    std::function<QList<QByteArray>(QString &)> cmdGenerator = [&] (QString &splitMsg) -> QList<QByteArray> {
+        return QList<QByteArray>() << net->serverEncode(bufname) << lowLevelQuote(pack(net->serverEncode(ctcpTag), net->userEncode(bufname, splitMsg)));
+    };
+
+    net->putCmd(cmd, net->splitMessage(cmd, message, cmdGenerator));
 }
 
 

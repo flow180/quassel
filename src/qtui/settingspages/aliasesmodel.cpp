@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -238,7 +238,8 @@ void AliasesModel::revert()
 
     _configChanged = false;
     emit configChanged(false);
-    reset();
+    beginResetModel();
+    endResetModel();
 }
 
 
@@ -255,7 +256,8 @@ void AliasesModel::commit()
 void AliasesModel::initDone()
 {
     _modelReady = true;
-    reset();
+    beginResetModel();
+    endResetModel();
     emit modelReady(true);
 }
 
@@ -275,6 +277,7 @@ void AliasesModel::clientDisconnected()
     // clear
     _clonedAliasManager = ClientAliasManager();
     _modelReady = false;
-    reset();
+    beginResetModel();
+    endResetModel();
     emit modelReady(false);
 }

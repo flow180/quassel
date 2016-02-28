@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -18,12 +18,11 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.         *
  ***************************************************************************/
 
+#include <QIcon>
 #include <QMessageBox>
 #include <QPushButton>
 
 #include "settingspagedlg.h"
-
-#include "iconloader.h"
 
 SettingsPageDlg::SettingsPageDlg(SettingsPage *page, QWidget *parent)
     : QDialog(parent)
@@ -37,7 +36,7 @@ SettingsPageDlg::SettingsPageDlg(SettingsPage *page, QWidget *parent)
 
     ui.pageTitle->setText(page->title());
     setWindowTitle(tr("Configure %1").arg(page->title()));
-    setWindowIcon(SmallIcon("configure"));
+    setWindowIcon(QIcon::fromTheme("configure"));
 
     // make the scrollarea behave sanely
     ui.settingsFrame->setWidgetResizable(true);

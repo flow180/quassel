@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -41,8 +41,8 @@
 #include "storage.h"
 #include "types.h"
 
+class CoreAuthHandler;
 class CoreSession;
-class RemoteConnection;
 struct NetworkInfo;
 class SessionThread;
 class SignalProxy;
@@ -63,6 +63,25 @@ public:
 
     /*** Storage access ***/
     // These methods are threadsafe.
+
+    //! Validate user
+    /**
+     * \param userName The user's login name
+     * \param password The user's uncrypted password
+     * \return The user's ID if valid; 0 otherwise
+     */
+    static inline UserId validateUser(const QString &userName, const QString &password) {
+        return instance()->_storage->validateUser(userName, password);
+    }
+
+
+    //! Change a user's password
+    /**
+     * \param userId     The user's ID
+     * \param password   The user's unencrypted new password
+     * \return true, if the password change was successful
+     */
+    static bool changeUserPassword(UserId userId, const QString &password);
 
     //! Store a user setting persistently
     /**
@@ -472,7 +491,12 @@ public:
     }
 
 
-    const QDateTime &startTime() const { return _startTime; }
+    static inline QDateTime startTime() { return instance()->_startTime; }
+    static inline bool isConfigured() { return instance()->_configured; }
+    static bool sslSupported();
+    static QVariantList backendInfo();
+
+    static QString setup(const QString &adminUser, const QString &adminPassword, const QString &backend, const QVariantMap &setupData);
 
     static inline QTimer &syncTimer() { return instance()->_storageSyncTimer; }
 
@@ -485,14 +509,15 @@ public slots:
     /** \note This method is threadsafe.
      */
     void syncStorage();
-    void setupInternalClientSession(InternalConnection *clientConnection);
+    void setupInternalClientSession(InternalPeer *clientConnection);
+    QString setupCore(const QString &adminUser, const QString &adminPassword, const QString &backend, const QVariantMap &setupData);
 
 signals:
     //! Sent when a BufferInfo is updated in storage.
     void bufferInfoUpdated(UserId user, const BufferInfo &info);
 
-    //! Relay From CoreSession::sessionState(const QVariant &). Used for internal connection only
-    void sessionState(const QVariant &);
+    //! Relay from CoreSession::sessionState(). Used for internal connection only
+    void sessionState(const Protocol::SessionState &sessionState);
 
 protected:
     virtual void customEvent(QEvent *event);
@@ -503,15 +528,12 @@ private slots:
     void incomingConnection();
     void clientDisconnected();
 
-    bool initStorage(const QString &backend, QVariantMap settings, bool setup = false);
-    bool initStorage(QVariantMap dbSettings, bool setup = false);
+    bool initStorage(const QString &backend, const QVariantMap &settings, bool setup = false);
 
-#ifdef HAVE_SSL
-    void sslErrors(const QList<QSslError> &errors);
-#endif
-    void socketError(QAbstractSocket::SocketError);
+    void socketError(QAbstractSocket::SocketError err, const QString &errorString);
+    void setupClientSession(RemotePeer *, UserId);
 
-    void processClientMessage(const QVariant &data);
+    bool changeUserPass(const QString &username);
 
 private:
     Core();
@@ -519,24 +541,23 @@ private:
     void init();
     static Core *instanceptr;
 
-    SessionThread *createSession(UserId userId, bool restoreState = false);
-    void setupClientSession(RemoteConnection *connection, UserId uid);
-    void addClientHelper(RemoteConnection *connection, UserId uid);
+    SessionThread *sessionForUser(UserId userId, bool restoreState = false);
+    void addClientHelper(RemotePeer *peer, UserId uid);
     //void processCoreSetup(QTcpSocket *socket, QVariantMap &msg);
     QString setupCoreForInternalUsage();
-    QString setupCore(QVariantMap setupData);
 
     void registerStorageBackends();
     bool registerStorageBackend(Storage *);
     void unregisterStorageBackends();
     void unregisterStorageBackend(Storage *);
     bool selectBackend(const QString &backend);
-    void createUser();
-    void changeUserPass(const QString &username);
+    bool createUser();
     void saveBackendSettings(const QString &backend, const QVariantMap &settings);
     QVariantMap promptForSettings(const Storage *storage);
 
-    QHash<UserId, SessionThread *> sessions;
+private:
+    QSet<CoreAuthHandler *> _connectingClients;
+    QHash<UserId, SessionThread *> _sessions;
     Storage *_storage;
     QTimer _storageSyncTimer;
 
@@ -547,8 +568,6 @@ private:
 #endif
 
     OidentdConfigGenerator *_oidentdConfigGenerator;
-
-    QHash<RemoteConnection *, QVariantMap> clientInfo;
 
     QHash<QString, Storage *> _storageBackends;
 

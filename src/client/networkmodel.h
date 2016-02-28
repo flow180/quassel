@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -72,6 +72,7 @@ signals:
 
 private slots:
     void onBeginRemoveChilds(int start, int end);
+    void onNetworkDestroyed();
 
 private:
     NetworkId _networkId;
@@ -125,6 +126,7 @@ public :
 
 public slots:
     virtual inline void setTopic(const QString &) { emit dataChanged(1); }
+    virtual inline void setEncrypted(bool) { emit dataChanged(); }
 
 private:
     BufferInfo _bufferInfo;
@@ -210,6 +212,7 @@ public slots:
 
 private slots:
     void ircChannelParted();
+    void ircChannelDestroyed();
 
 private:
     IrcChannel *_ircChannel;

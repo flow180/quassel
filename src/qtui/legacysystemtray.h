@@ -1,11 +1,11 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) version 3.                                           *
+ *   This file is free software; you can redistribute it and/or modify     *
+ *   it under the terms of the GNU Library General Public License (LGPL)   *
+ *   as published by the Free Software Foundation; either version 2 of the *
+ *   License, or (at your option) any later version.                       *
  *                                                                         *
  *   This program is distributed in the hope that it will be useful,       *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
@@ -23,12 +23,13 @@
 
 #ifndef QT_NO_SYSTEMTRAYICON
 
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
 #  include <KSystemTrayIcon>
 #else
 #  include <QSystemTrayIcon>
 #endif
 
+#include <QIcon>
 #include <QTimer>
 
 #include "systemtray.h"
@@ -44,7 +45,7 @@ public:
 
     virtual bool isVisible() const;
     virtual inline bool isSystemTrayAvailable() const;
-    virtual Icon stateIcon() const; // overriden to care about blinkState
+    virtual QIcon stateIcon() const; // overriden to care about blinkState
 
 public slots:
     virtual void setState(State state);
@@ -69,7 +70,7 @@ private:
     bool _blinkState;
     uint _lastMessageId;
 
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
     KSystemTrayIcon *_trayIcon;
 #else
     QSystemTrayIcon *_trayIcon;

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -43,13 +43,6 @@ Cipher *CoreIrcUser::cipher() const
         _cipher = new Cipher();
 
     return _cipher;
-}
-
-
-void CoreIrcUser::setEncrypted(bool e)
-{
-    Q_UNUSED(e);
-    // TODO
 }
 
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -24,8 +24,10 @@
 #include <QDebug>
 #include <QString>
 #include <QVariant>
+#include <QDataStream>
 #include <QTextStream>
 #include <QHostAddress>
+#include <QDataStream>
 
 class SignedId
 {

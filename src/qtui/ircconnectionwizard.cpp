@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -23,6 +23,7 @@
 #include "client.h"
 #include "identityeditwidget.h"
 #include "simplenetworkeditor.h"
+#include "presetnetworks.h"
 
 #include <QVBoxLayout>
 
@@ -143,12 +144,12 @@ NetworkPage::NetworkPage(QWidget *parent)
     : QWizardPage(parent),
     _networkEditor(new SimpleNetworkEditor(this))
 {
-    QStringList defaultNets = Network::presetNetworks(true);
+    QStringList defaultNets = PresetNetworks::names(true);
     if (!defaultNets.isEmpty()) {
-        NetworkInfo info = Network::networkInfoFromPreset(defaultNets[0]);
+        NetworkInfo info = PresetNetworks::networkInfo(defaultNets[0]);
         if (!info.networkName.isEmpty()) {
             _networkInfo = info;
-            _channelList = Network::presetDefaultChannels(defaultNets[0]);
+            _channelList = PresetNetworks::defaultChannels(defaultNets[0]);
         }
     }
 

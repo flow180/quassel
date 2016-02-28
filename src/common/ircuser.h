@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -39,21 +39,22 @@ class IrcUser : public SyncableObject
     SYNCABLE_OBJECT
     Q_OBJECT
 
-    Q_PROPERTY(QString user READ user WRITE setUser STORED false)
-    Q_PROPERTY(QString host READ host WRITE setHost STORED false)
-    Q_PROPERTY(QString nick READ nick WRITE setNick STORED false)
-    Q_PROPERTY(QString realName READ realName WRITE setRealName STORED false)
-    Q_PROPERTY(bool away READ isAway WRITE setAway STORED false)
-    Q_PROPERTY(QString awayMessage READ awayMessage WRITE setAwayMessage STORED false)
-    Q_PROPERTY(QDateTime idleTime READ idleTime WRITE setIdleTime STORED false)
-    Q_PROPERTY(QDateTime loginTime READ loginTime WRITE setLoginTime STORED false)
-    Q_PROPERTY(QString server READ server WRITE setServer STORED false)
-    Q_PROPERTY(QString ircOperator READ ircOperator WRITE setIrcOperator STORED false)
-    Q_PROPERTY(int lastAwayMessage READ lastAwayMessage WRITE setLastAwayMessage STORED false)
-    Q_PROPERTY(QString whoisServiceReply READ whoisServiceReply WRITE setWhoisServiceReply STORED false)
-    Q_PROPERTY(QString suserHost READ suserHost WRITE setSuserHost STORED false)
+    Q_PROPERTY(QString user READ user WRITE setUser)
+    Q_PROPERTY(QString host READ host WRITE setHost)
+    Q_PROPERTY(QString nick READ nick WRITE setNick)
+    Q_PROPERTY(QString realName READ realName WRITE setRealName)
+    Q_PROPERTY(bool away READ isAway WRITE setAway)
+    Q_PROPERTY(QString awayMessage READ awayMessage WRITE setAwayMessage)
+    Q_PROPERTY(QDateTime idleTime READ idleTime WRITE setIdleTime)
+    Q_PROPERTY(QDateTime loginTime READ loginTime WRITE setLoginTime)
+    Q_PROPERTY(QString server READ server WRITE setServer)
+    Q_PROPERTY(QString ircOperator READ ircOperator WRITE setIrcOperator)
+    Q_PROPERTY(int lastAwayMessage READ lastAwayMessage WRITE setLastAwayMessage)
+    Q_PROPERTY(QString whoisServiceReply READ whoisServiceReply WRITE setWhoisServiceReply)
+    Q_PROPERTY(QString suserHost READ suserHost WRITE setSuserHost)
+    Q_PROPERTY(bool encrypted READ encrypted WRITE setEncrypted)
 
-    Q_PROPERTY(QStringList channels READ channels STORED false)
+    Q_PROPERTY(QStringList channels READ channels)
     Q_PROPERTY(QString userModes READ userModes WRITE setUserModes)
 
 public :
@@ -74,6 +75,7 @@ public :
     inline int lastAwayMessage() const { return _lastAwayMessage; }
     inline QString whoisServiceReply() const { return _whoisServiceReply; }
     inline QString suserHost() const { return _suserHost; }
+    inline bool encrypted() const { return _encrypted; }
     inline Network *network() const { return _network; }
 
     inline QString userModes() const { return _userModes; }
@@ -111,11 +113,17 @@ public slots:
     void setLastAwayMessage(const int &lastAwayMessage);
     void setWhoisServiceReply(const QString &whoisServiceReply);
     void setSuserHost(const QString &suserHost);
+    void setEncrypted(bool encrypted);
     void updateHostmask(const QString &mask);
 
     void setUserModes(const QString &modes);
 
-    void joinChannel(IrcChannel *channel);
+    /*!
+     * \brief joinChannel Called when user joins some channel, this function inserts the channel to internal list of channels this user is in.
+     * \param channel Pointer to a channel this user just joined
+     * \param skip_channel_join If this is false, this function will also call IrcChannel::joinIrcUser, can be set to true as a performance tweak.
+     */
+    void joinChannel(IrcChannel *channel, bool skip_channel_join = false);
     void joinChannel(const QString &channelname);
     void partChannel(IrcChannel *channel);
     void partChannel(const QString &channelname);
@@ -138,6 +146,7 @@ signals:
 //   void lastAwayMessageSet(int lastAwayMessage);
 //   void whoisServiceReplySet(QString whoisServiceReply);
 //   void suserHostSet(QString suserHost);
+    void encryptedSet(bool encrypted);
 
     void userModesSet(QString modes);
     void userModesAdded(QString modes);
@@ -183,6 +192,7 @@ private:
     int _lastAwayMessage;
     QString _whoisServiceReply;
     QString _suserHost;
+    bool _encrypted;
 
     // QSet<QString> _channels;
     QSet<IrcChannel *> _channels;

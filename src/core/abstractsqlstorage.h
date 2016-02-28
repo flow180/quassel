@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -80,13 +80,14 @@ protected:
      *  When reimplementing this method, don't use logDB() inside this function as
      *  this would cause as we're just about to initialize that DB connection.
      */
-    inline virtual void initDbSession(QSqlDatabase & /* db */) {}
+    inline virtual bool initDbSession(QSqlDatabase & /* db */) { return true; }
 
 private slots:
     void connectionDestroyed();
 
 private:
     void addConnectionToPool();
+    void dbConnect(QSqlDatabase &db);
 
     int _schemaVersion;
     bool _debug;
@@ -130,6 +131,7 @@ public:
         UserId id;
         QString username;
         QString password;
+        int hashversion;
     };
 
     struct SenderMO {

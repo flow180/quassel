@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -23,12 +23,19 @@
 #include "coreirclisthelper.h"
 #include "corenetwork.h"
 #include "coresession.h"
+#include "coretransfer.h"
+#include "coretransfermanager.h"
 #include "ctcpevent.h"
 #include "ircevent.h"
 #include "ircuser.h"
+#include "logger.h"
 #include "messageevent.h"
 #include "netsplit.h"
 #include "quassel.h"
+
+#ifdef HAVE_QCA2
+#  include "keyevent.h"
+#endif
 
 CoreSessionEventProcessor::CoreSessionEventProcessor(CoreSession *session)
     : BasicHandler("handleCtcp", session),
@@ -112,14 +119,22 @@ void CoreSessionEventProcessor::processIrcEventAuthenticate(IrcEvent *e)
 
     CoreNetwork *net = coreNetwork(e);
 
-    QString construct = net->saslAccount();
-    construct.append(QChar(QChar::Null));
-    construct.append(net->saslAccount());
-    construct.append(QChar(QChar::Null));
-    construct.append(net->saslPassword());
-    QByteArray saslData = QByteArray(construct.toAscii().toBase64());
-    saslData.prepend("AUTHENTICATE ");
-    net->putRawLine(saslData);
+#ifdef HAVE_SSL
+    if (net->identityPtr()->sslCert().isNull()) {
+#endif
+        QString construct = net->saslAccount();
+        construct.append(QChar(QChar::Null));
+        construct.append(net->saslAccount());
+        construct.append(QChar(QChar::Null));
+        construct.append(net->saslPassword());
+        QByteArray saslData = QByteArray(construct.toLatin1().toBase64());
+        saslData.prepend("AUTHENTICATE ");
+        net->putRawLine(saslData);
+#ifdef HAVE_SSL
+    } else {
+        net->putRawLine("AUTHENTICATE +");
+    }
+#endif
 }
 
 
@@ -129,9 +144,19 @@ void CoreSessionEventProcessor::processIrcEventCap(IrcEvent *e)
     // additional CAP messages (ls, multi-prefix, et cetera).
 
     if (e->params().count() == 3) {
-        if (e->params().at(2) == "sasl") {
+        if (e->params().at(2).startsWith("sasl")) { // Freenode (at least) sends "sasl " with a trailing space for some reason!
             // FIXME use event
-            coreNetwork(e)->putRawLine(coreNetwork(e)->serverEncode("AUTHENTICATE PLAIN")); // Only working with PLAIN atm, blowfish later
+            // if the current identity has a cert set, use SASL EXTERNAL
+#ifdef HAVE_SSL
+            if (!coreNetwork(e)->identityPtr()->sslCert().isNull()) {
+                coreNetwork(e)->putRawLine(coreNetwork(e)->serverEncode("AUTHENTICATE EXTERNAL"));
+            } else {
+#endif
+                // Only working with PLAIN atm, blowfish later
+                coreNetwork(e)->putRawLine(coreNetwork(e)->serverEncode("AUTHENTICATE PLAIN"));
+#ifdef HAVE_SSL
+            }
+#endif
         }
     }
 }
@@ -418,15 +443,47 @@ void CoreSessionEventProcessor::processIrcEventTopic(IrcEvent *e)
 }
 
 
-/* RPL_WELCOME */
-void CoreSessionEventProcessor::processIrcEvent001(IrcEvent *e)
+#ifdef HAVE_QCA2
+void CoreSessionEventProcessor::processKeyEvent(KeyEvent *e)
 {
-    if (!checkParamCount(e, 1))
+    if (!Cipher::neededFeaturesAvailable()) {
+        emit newEvent(new MessageEvent(Message::Error, e->network(), tr("Unable to perform key exchange, missing qca-ossl plugin."), e->prefix(), e->target(), Message::None, e->timestamp()));
+        return;
+    }
+    CoreNetwork *net = qobject_cast<CoreNetwork*>(e->network());
+    Cipher *c = net->cipher(e->target());
+    if (!c) // happens when there is no CoreIrcChannel for the target (i.e. never?)
         return;
 
-    QString myhostmask = e->params().at(0).section(' ', -1, -1);
+    if (e->exchangeType() == KeyEvent::Init) {
+        QByteArray pubKey = c->parseInitKeyX(e->key());
+        if (pubKey.isEmpty()) {
+            emit newEvent(new MessageEvent(Message::Error, e->network(), tr("Unable to parse the DH1080_INIT. Key exchange failed."), e->prefix(), e->target(), Message::None, e->timestamp()));
+            return;
+        } else {
+            net->setCipherKey(e->target(), c->key());
+            emit newEvent(new MessageEvent(Message::Info, e->network(), tr("Your key is set and messages will be encrypted."), e->prefix(), e->target(), Message::None, e->timestamp()));
+            QList<QByteArray> p;
+            p << net->serverEncode(e->target()) << net->serverEncode("DH1080_FINISH ")+pubKey;
+            net->putCmd("NOTICE", p);
+        }
+    } else {
+        if (c->parseFinishKeyX(e->key())) {
+            net->setCipherKey(e->target(), c->key());
+            emit newEvent(new MessageEvent(Message::Info, e->network(), tr("Your key is set and messages will be encrypted."), e->prefix(), e->target(), Message::None, e->timestamp()));
+        } else {
+            emit newEvent(new MessageEvent(Message::Info, e->network(), tr("Failed to parse DH1080_FINISH. Key exchange failed."), e->prefix(), e->target(), Message::None, e->timestamp()));
+        }
+    }
+}
+#endif
+
+
+/* RPL_WELCOME */
+void CoreSessionEventProcessor::processIrcEvent001(IrcEventNumeric *e)
+{
     e->network()->setCurrentServer(e->prefix());
-    e->network()->setMyNick(nickFromMask(myhostmask));
+    e->network()->setMyNick(e->target());
 }
 
 
@@ -736,7 +793,7 @@ void CoreSessionEventProcessor::processIrcEvent353(IrcEvent *e)
     QStringList nicks;
     QStringList modes;
 
-    foreach(QString nick, e->params()[2].split(' ')) {
+    foreach(QString nick, e->params()[2].split(' ', QString::SkipEmptyParts)) {
         QString mode;
 
         if (e->network()->prefixes().contains(nick[0])) {
@@ -956,9 +1013,70 @@ void CoreSessionEventProcessor::handleCtcpClientinfo(CtcpEvent *e)
 }
 
 
+// http://www.irchelp.org/irchelp/rfc/ctcpspec.html
+// http://en.wikipedia.org/wiki/Direct_Client-to-Client
+void CoreSessionEventProcessor::handleCtcpDcc(CtcpEvent *e)
+{
+    // DCC support is unfinished, experimental and potentially dangerous, so make it opt-in
+    if (!Quassel::isOptionSet("enable-experimental-dcc")) {
+        quInfo() << "DCC disabled, start core with --enable-experimental-dcc if you really want to try it out";
+        return;
+    }
+
+    // normal:  SEND <filename> <ip> <port> [<filesize>]
+    // reverse: SEND <filename> <ip> 0 <filesize> <token>
+    QStringList params = e->param().split(' ');
+    if (params.count()) {
+        QString cmd = params[0].toUpper();
+        if (cmd == "SEND") {
+            if (params.count() < 4) {
+                qWarning() << "Invalid DCC SEND request:" << e;  // TODO emit proper error to client
+                return;
+            }
+            QString filename = params[1];
+            QHostAddress address;
+            quint16 port = params[3].toUShort();
+            quint64 size = 0;
+            QString numIp = params[2]; // this is either IPv4 as a 32 bit value, or IPv6 (which always contains a colon)
+            if (numIp.contains(':')) { // IPv6
+                if (!address.setAddress(numIp)) {
+                    qWarning() << "Invalid IPv6:" << numIp;
+                    return;
+                }
+            }
+            else {
+                address.setAddress(numIp.toUInt());
+            }
+
+            if (port == 0) { // Reverse DCC is indicated by a 0 port
+                emit newEvent(new MessageEvent(Message::Error, e->network(), tr("Reverse DCC SEND not supported"), e->prefix(), e->target(), Message::None, e->timestamp()));
+                return;
+            }
+            if (port < 1024) {
+                qWarning() << "Privileged port requested:" << port; // FIXME ask user if this is ok
+            }
+
+
+            if (params.count() > 4) { // filesize is optional
+                size = params[4].toULong();
+            }
+
+            // TODO: check if target is the right thing to use for the partner
+            CoreTransfer *transfer = new CoreTransfer(Transfer::Receive, e->target(), filename, address, port, size, this);
+            coreSession()->signalProxy()->synchronize(transfer);
+            coreSession()->transferManager()->addTransfer(transfer);
+        }
+        else {
+            emit newEvent(new MessageEvent(Message::Error, e->network(), tr("DCC %1 not supported").arg(cmd), e->prefix(), e->target(), Message::None, e->timestamp()));
+            return;
+        }
+    }
+}
+
+
 void CoreSessionEventProcessor::handleCtcpPing(CtcpEvent *e)
 {
-    e->setReply(e->param());
+    e->setReply(e->param().isNull() ? "" : e->param());
 }
 
 

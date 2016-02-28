@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,13 +20,14 @@
 
 #include "chatmonitorsettingspage.h"
 
+#include <QIcon>
+
 #include "client.h"
 #include "networkmodel.h"
 #include "bufferviewconfig.h"
 #include "buffermodel.h"
 #include "bufferview.h"
 #include "bufferviewfilter.h"
-#include "iconloader.h"
 #include "chatviewsettings.h"
 
 #include <QVariant>
@@ -36,8 +37,8 @@ ChatMonitorSettingsPage::ChatMonitorSettingsPage(QWidget *parent)
 {
     ui.setupUi(this);
 
-    ui.activateBuffer->setIcon(SmallIcon("go-next"));
-    ui.deactivateBuffer->setIcon(SmallIcon("go-previous"));
+    ui.activateBuffer->setIcon(QIcon::fromTheme("go-next"));
+    ui.deactivateBuffer->setIcon(QIcon::fromTheme("go-previous"));
 
     // setup available buffers config (for the bufferview on the left)
     _configAvailable = new BufferViewConfig(-667, this);
@@ -63,6 +64,8 @@ ChatMonitorSettingsPage::ChatMonitorSettingsPage(QWidget *parent)
     connect(ui.operationMode, SIGNAL(currentIndexChanged(int)), SLOT(switchOperationMode(int)));
     connect(ui.showHighlights, SIGNAL(toggled(bool)), SLOT(widgetHasChanged()));
     connect(ui.showOwnMessages, SIGNAL(toggled(bool)), SLOT(widgetHasChanged()));
+    connect(ui.showBacklog, SIGNAL(toggled(bool)), SLOT(widgetHasChanged()));
+    connect(ui.includeRead, SIGNAL(toggled(bool)), SLOT(widgetHasChanged()));
 }
 
 
@@ -79,6 +82,8 @@ void ChatMonitorSettingsPage::defaults()
     settings["ShowOwnMsgs"] = false;
     settings["Buffers"] = QVariant();
     settings["Default"] = true;
+    settings["ShowBacklog"] = true;
+    settings["IncludeRead"] = false;
     load();
     widgetHasChanged();
 }
@@ -95,6 +100,8 @@ void ChatMonitorSettingsPage::load()
     ui.operationMode->setCurrentIndex(settings["OperationMode"].toInt() - 1);
     ui.showHighlights->setChecked(settings["ShowHighlights"].toBool());
     ui.showOwnMessages->setChecked(settings["ShowOwnMsgs"].toBool());
+    ui.showBacklog->setChecked(settings["ShowBacklog"].toBool());
+    ui.includeRead->setChecked(settings["IncludeRead"].toBool());
 
     // get all available buffer Ids
     QList<BufferId> allBufferIds = Client::networkModel()->allBufferIds();
@@ -127,6 +134,8 @@ void ChatMonitorSettingsPage::loadSettings()
     settings["ShowHighlights"] = chatViewSettings.value("ShowHighlights", false);
     settings["ShowOwnMsgs"] = chatViewSettings.value("ShowOwnMsgs", false);
     settings["Buffers"] = chatViewSettings.value("Buffers", QVariantList());
+    settings["ShowBacklog"] = chatViewSettings.value("ShowBacklog", true);
+    settings["IncludeRead"] = chatViewSettings.value("IncludeRead", true);
 }
 
 
@@ -137,6 +146,8 @@ void ChatMonitorSettingsPage::save()
     chatViewSettings.setValue("OperationMode", ui.operationMode->currentIndex() + 1);
     chatViewSettings.setValue("ShowHighlights", ui.showHighlights->isChecked());
     chatViewSettings.setValue("ShowOwnMsgs", ui.showOwnMessages->isChecked());
+    chatViewSettings.setValue("ShowBacklog", ui.showBacklog->isChecked());
+    chatViewSettings.setValue("IncludeRead", ui.includeRead->isChecked());
 
     // save list of active buffers
     QVariantList saveableBufferIdList;
@@ -164,6 +175,10 @@ bool ChatMonitorSettingsPage::testHasChanged()
     if (settings["ShowHighlights"].toBool() != ui.showHighlights->isChecked())
         return true;
     if (settings["ShowOwnMsgs"].toBool() != ui.showOwnMessages->isChecked())
+        return true;
+    if (settings["ShowBacklog"].toBool() != ui.showBacklog->isChecked())
+        return true;
+    if (settings["IncludeRead"].toBool() != ui.includeRead->isChecked())
         return true;
 
     if (_configActive->bufferList().count() != settings["Buffers"].toList().count())

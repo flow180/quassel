@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -22,6 +22,7 @@
 #define BUFFERHOTLISTFILTER_H
 
 #include <QSortFilterProxyModel>
+#include "types.h"
 
 class BufferHotListFilter : public QSortFilterProxyModel
 {
@@ -31,6 +32,7 @@ public:
     BufferHotListFilter(QAbstractItemModel *source, QObject *parent = 0);
 
     virtual inline int columnCount(const QModelIndex &) const { return 1; }
+    BufferId hottestBuffer();
 //   QVariant data(const QModelIndex &index, int role) const;
 
 protected:

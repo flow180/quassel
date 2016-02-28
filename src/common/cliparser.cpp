@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -32,10 +32,8 @@ CliParser::CliParser() : AbstractCliParser()
 }
 
 
-void CliParser::addArgument(const QString &longName_, const CliParserArg &arg)
+void CliParser::addArgument(const QString &longName, const CliParserArg &arg)
 {
-    QString longName = longName_;
-    longName.remove(QRegExp("\\s*<.*>\\s*")); // KCmdLineArgs takes args of the form "arg <defval>"
     if (argsMap.contains(longName)) qWarning() << "Warning: Multiple definition of argument" << longName;
     if (arg.shortName != 0 && !lnameOfShortArg(arg.shortName).isNull())
         qWarning().nospace() << "Warning: Redefining shortName '" << arg.shortName << "' for " << longName << " previously defined for " << lnameOfShortArg(arg.shortName);
@@ -126,8 +124,8 @@ bool CliParser::init(const QStringList &args)
             // if next arg is a short/long option/switch the current arg is one too
             if (nextArg == argsRaw.constEnd() || nextArg->startsWith("-")) {
                 // switch
-                for (int i = 0; i < currentArg->mid(1).toAscii().size(); i++) {
-                    name = currentArg->mid(1).toAscii().at(i);
+                for (int i = 0; i < currentArg->mid(1).toLatin1().size(); i++) {
+                    name = currentArg->mid(1).toLatin1().at(i);
                     if (!addShortArg(CliParserArg::CliArgSwitch, name)) return false;
                 }
             }
@@ -135,7 +133,7 @@ bool CliParser::init(const QStringList &args)
             else {
                 // option
                 // short options are not freely mixable with other shortargs
-                if (currentArg->mid(1).toAscii().size() > 1) {
+                if (currentArg->mid(1).toLatin1().size() > 1) {
                     qWarning() << "Warning: Shortoptions may not be combined with other shortoptions or switches";
                     return false;
                 }
@@ -146,9 +144,9 @@ bool CliParser::init(const QStringList &args)
                     skipNext = true;
                 }
                 else value = currentArg->toLocal8Bit();
-                name = currentArg->mid(1).toAscii().at(0);
+                name = currentArg->mid(1).toLatin1().at(0);
                 // we took one argument as argument to an option so skip it next time
-                if (skipNext) currentArg++;
+                if (skipNext) ++currentArg;
                 if (!addShortArg(CliParserArg::CliArgOption, name, value)) return false;
             }
         }
@@ -189,8 +187,8 @@ void CliParser::usage()
         }
         else output.append("    ");
         lnameField.append(" --").append(arg.key());
-        if (arg.value().type == CliParserArg::CliArgOption) {
-            lnameField.append("=[").append(arg.key().toUpper()).append("]");
+        if (arg.value().type == CliParserArg::CliArgOption && !arg.value().valueName.isEmpty()) {
+            lnameField.append("=<").append(arg.value().valueName).append(">");
         }
         output.append(lnameField.leftJustified(lnameFieldSize));
         if (!arg.value().help.isEmpty()) {

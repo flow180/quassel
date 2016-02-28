@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -25,6 +25,7 @@
 #include <QPointer>
 
 #include "bufferinfo.h"
+#include "coreaccount.h"
 #include "coreconnection.h"
 #include "quassel.h"
 #include "types.h"
@@ -48,6 +49,7 @@ class ClientBacklogManager;
 class ClientBufferViewManager;
 class ClientIgnoreListManager;
 class ClientIrcListHelper;
+class ClientTransferManager;
 class ClientUserInputHandler;
 class CoreAccountModel;
 class CoreConnection;
@@ -55,6 +57,7 @@ class IrcUser;
 class IrcChannel;
 class NetworkConfig;
 class SignalProxy;
+
 struct NetworkInfo;
 
 class Client : public QObject
@@ -116,11 +119,14 @@ public:
     static inline ClientUserInputHandler *inputHandler() { return instance()->_inputHandler; }
     static inline NetworkConfig *networkConfig() { return instance()->_networkConfig; }
     static inline ClientIgnoreListManager *ignoreListManager() { return instance()->_ignoreListManager; }
+    static inline ClientTransferManager *transferManager() { return instance()->_transferManager; }
 
     static inline CoreAccountModel *coreAccountModel() { return instance()->_coreAccountModel; }
     static inline CoreConnection *coreConnection() { return instance()->_coreConnection; }
     static inline CoreAccount currentCoreAccount() { return coreConnection()->currentAccount(); }
     static inline Quassel::Features coreFeatures() { return _coreFeatures; }
+
+    static void setCoreFeatures(Quassel::Features features);
 
     static bool isConnected();
     static bool internalCore();
@@ -136,7 +142,13 @@ public:
     static void mergeBuffersPermanently(BufferId bufferId1, BufferId bufferId2);
     static void purgeKnownBufferIds();
 
+    static void changePassword(const QString &oldPassword, const QString &newPassword);
+
+#if QT_VERSION < 0x050000
     static void logMessage(QtMsgType type, const char *msg);
+#else
+    static void logMessage(QtMsgType, const QMessageLogContext&, const QString&);
+#endif
     static inline const QString &debugLog() { return instance()->_debugLogBuffer; }
 
 signals:
@@ -181,6 +193,10 @@ signals:
      */
     void bufferMarkedAsRead(BufferId id);
 
+    //! Requests a password change (user name must match the currently logged in user)
+    void requestPasswordChange(PeerPtr peer, const QString &userName, const QString &oldPassword, const QString &newPassword);
+    void passwordChanged(bool success);
+
 public slots:
     void disconnectFromCore();
 
@@ -204,6 +220,8 @@ private slots:
     void coreNetworkCreated(NetworkId);
     void coreNetworkRemoved(NetworkId);
 
+    void corePasswordChanged(PeerPtr, bool success);
+
     void requestInitialBacklog();
 
     void sendBufferedUserInput();
@@ -214,7 +232,6 @@ private:
     void init();
 
     static void addNetwork(Network *);
-    static void setCoreFeatures(Quassel::Features);
     static inline BufferSyncer *bufferSyncer() { return instance()->_bufferSyncer; }
 
     static QPointer<Client> instanceptr;
@@ -232,6 +249,7 @@ private:
     ClientUserInputHandler *_inputHandler;
     NetworkConfig *_networkConfig;
     ClientIgnoreListManager *_ignoreListManager;
+    ClientTransferManager *_transferManager;
 
     MessageModel *_messageModel;
     AbstractMessageProcessor *_messageProcessor;

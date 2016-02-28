@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -24,6 +24,7 @@
 #include <QDataStream>
 #include <QFontMetricsF>
 #include <QHash>
+#include <QIcon>
 #include <QTextCharFormat>
 #include <QTextLayout>
 #include <QPalette>
@@ -185,13 +186,13 @@ private:
     static QHash<QString, FormatType> _formatCodes;
     static QString _timestampFormatString;
 
-    QPixmap _channelJoinedIcon;
-    QPixmap _channelPartedIcon;
-    QPixmap _userOfflineIcon;
-    QPixmap _userOnlineIcon;
-    QPixmap _userAwayIcon;
-    QPixmap _categoryOpIcon;
-    QPixmap _categoryVoiceIcon;
+    QIcon _channelJoinedIcon;
+    QIcon _channelPartedIcon;
+    QIcon _userOfflineIcon;
+    QIcon _userOnlineIcon;
+    QIcon _userAwayIcon;
+    QIcon _categoryOpIcon;
+    QIcon _categoryVoiceIcon;
     int _opIconLimit;
     int _voiceIconLimit;
     bool _showNickViewIcons;

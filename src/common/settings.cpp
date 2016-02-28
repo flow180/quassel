@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -27,7 +27,7 @@ const int VERSION = 1;
 QHash<QString, QVariant> Settings::settingsCache;
 QHash<QString, SettingsChangeNotifier *> Settings::settingsChangeNotifier;
 
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
 #  define create_qsettings QSettings s(QCoreApplication::organizationDomain(), appName)
 #else
 #  define create_qsettings QSettings s(fileName(), format())

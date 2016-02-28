@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This contains code from KStatusNotifierItem, part of the KDE libs     *
@@ -51,15 +51,8 @@ public:
 protected:
     virtual QString iconNameForAction(QAction *action) // TODO Qt 4.7: fixme when we have converted our iconloader
     {
-        Icon icon(action->icon());
-#if QT_VERSION >= 0x040701
-        // QIcon::name() is in the 4.7 git branch, but it is not in 4.7 TP.
-        // If you get a build error here, you need to update your pre-release
-        // of Qt 4.7.
+        QIcon icon(action->icon());
         return icon.isNull() ? QString() : icon.name();
-#else
-        return QString();
-#endif
     }
 };
 
@@ -293,7 +286,7 @@ bool StatusNotifierItem::eventFilter(QObject *watched, QEvent *event)
 {
     if (mode() == StatusNotifier) {
         //FIXME: ugly ugly workaround to weird QMenu's focus problems
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
         if (watched == trayMenu() &&
             (event->type() == QEvent::WindowDeactivate || (event->type() == QEvent::MouseButtonRelease && static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton))) {
             // put at the back of event queue to let the action activate anyways
@@ -314,7 +307,11 @@ void StatusNotifierItem::showMessage(const QString &title, const QString &messag
     QString message = message_;
     if (_notificationsClient->isValid()) {
         if (_notificationsClientSupportsMarkup)
+#if QT_VERSION < 0x050000
             message = Qt::escape(message);
+#else
+            message = message.toHtmlEscaped();
+#endif
 
         QStringList actions;
         if (_notificationsClientSupportsActions)

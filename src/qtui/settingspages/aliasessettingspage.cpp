@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,16 +21,15 @@
 #include "aliasessettingspage.h"
 
 #include <QHeaderView>
+#include <QIcon>
 #include <QItemSelectionModel>
-
-#include "iconloader.h"
 
 AliasesSettingsPage::AliasesSettingsPage(QWidget *parent)
     : SettingsPage(tr("IRC"), tr("Aliases"), parent)
 {
     ui.setupUi(this);
-    ui.newAliasButton->setIcon(SmallIcon("list-add"));
-    ui.deleteAliasButton->setIcon(SmallIcon("edit-delete"));
+    ui.newAliasButton->setIcon(QIcon::fromTheme("list-add"));
+    ui.deleteAliasButton->setIcon(QIcon::fromTheme("edit-delete"));
 
     ui.aliasesView->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui.aliasesView->setSelectionMode(QAbstractItemView::SingleSelection);

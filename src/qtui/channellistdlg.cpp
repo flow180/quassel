@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -22,12 +22,11 @@
 
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QSpacerItem>
 
 #include "client.h"
 #include "clientirclisthelper.h"
-#include "icon.h"
-#include "iconloader.h"
 
 ChannelListDlg::ChannelListDlg(QWidget *parent)
     : QDialog(parent),
@@ -42,7 +41,7 @@ ChannelListDlg::ChannelListDlg(QWidget *parent)
     _sortFilter.setFilterKeyColumn(-1);
 
     ui.setupUi(this);
-    ui.advancedModeLabel->setPixmap(BarIcon("edit-rename"));
+    ui.advancedModeLabel->setPixmap(QIcon::fromTheme("edit-rename").pixmap(22));
 
     ui.channelListView->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui.channelListView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -55,7 +54,7 @@ ChannelListDlg::ChannelListDlg(QWidget *parent)
 
     ui.searchChannelsButton->setAutoDefault(false);
 
-    setWindowIcon(Icon("format-list-unordered"));
+    setWindowIcon(QIcon::fromTheme("format-list-unordered"));
 
     connect(ui.advancedModeLabel, SIGNAL(clicked()), this, SLOT(toggleMode()));
     connect(ui.searchChannelsButton, SIGNAL(clicked()), this, SLOT(requestSearch()));
@@ -133,14 +132,14 @@ void ChannelListDlg::setAdvancedMode(bool advanced)
             delete _simpleModeSpacer;
             _simpleModeSpacer = 0;
         }
-        ui.advancedModeLabel->setPixmap(BarIcon("edit-clear-locationbar-rtl"));
+        ui.advancedModeLabel->setPixmap(QIcon::fromTheme("edit-clear-locationbar-rtl", QIcon::fromTheme("edit-clear")).pixmap(16));
     }
     else {
         if (!_simpleModeSpacer) {
             _simpleModeSpacer = new QSpacerItem(40, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
             ui.searchLayout->insertSpacerItem(0, _simpleModeSpacer);
         }
-        ui.advancedModeLabel->setPixmap(BarIcon("edit-rename"));
+        ui.advancedModeLabel->setPixmap(QIcon::fromTheme("edit-rename").pixmap(16));
     }
 
     ui.channelNameLineEdit->clear();

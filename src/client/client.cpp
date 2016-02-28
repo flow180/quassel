@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -34,6 +34,7 @@
 #include "clientirclisthelper.h"
 #include "clientidentity.h"
 #include "clientignorelistmanager.h"
+#include "clienttransfermanager.h"
 #include "clientuserinputhandler.h"
 #include "coreaccountmodel.h"
 #include "coreconnection.h"
@@ -47,6 +48,7 @@
 #include "quassel.h"
 #include "signalproxy.h"
 #include "util.h"
+#include "clientauthhandler.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,10 +104,11 @@ Client::Client(QObject *parent)
     _inputHandler(0),
     _networkConfig(0),
     _ignoreListManager(0),
+    _transferManager(0),
     _messageModel(0),
     _messageProcessor(0),
     _coreAccountModel(new CoreAccountModel(this)),
-    _coreConnection(new CoreConnection(_coreAccountModel, this)),
+    _coreConnection(new CoreConnection(this)),
     _connected(false),
     _debugLog(&_debugLogBuffer)
 {
@@ -149,6 +152,9 @@ void Client::init()
     p->attachSignal(this, SIGNAL(requestRemoveNetwork(NetworkId)), SIGNAL(removeNetwork(NetworkId)));
     p->attachSlot(SIGNAL(networkCreated(NetworkId)), this, SLOT(coreNetworkCreated(NetworkId)));
     p->attachSlot(SIGNAL(networkRemoved(NetworkId)), this, SLOT(coreNetworkRemoved(NetworkId)));
+
+    p->attachSignal(this, SIGNAL(requestPasswordChange(PeerPtr,QString,QString,QString)), SIGNAL(changePassword(PeerPtr,QString,QString,QString)));
+    p->attachSlot(SIGNAL(passwordChanged(PeerPtr,bool)), this, SLOT(corePasswordChanged(PeerPtr,bool)));
 
     //connect(mainUi(), SIGNAL(connectToCore(const QVariantMap &)), this, SLOT(connectToCore(const QVariantMap &)));
     connect(mainUi(), SIGNAL(disconnectFromCore()), this, SLOT(disconnectFromCore()));
@@ -381,28 +387,34 @@ void Client::setSyncedToCore()
     connect(bufferSyncer(), SIGNAL(buffersPermanentlyMerged(BufferId, BufferId)), _messageModel, SLOT(buffersPermanentlyMerged(BufferId, BufferId)));
     connect(bufferSyncer(), SIGNAL(bufferMarkedAsRead(BufferId)), SIGNAL(bufferMarkedAsRead(BufferId)));
     connect(networkModel(), SIGNAL(requestSetLastSeenMsg(BufferId, MsgId)), bufferSyncer(), SLOT(requestSetLastSeenMsg(BufferId, const MsgId &)));
-    signalProxy()->synchronize(bufferSyncer());
+
+    SignalProxy *p = signalProxy();
+    p->synchronize(bufferSyncer());
 
     // create a new BufferViewManager
     Q_ASSERT(!_bufferViewManager);
-    _bufferViewManager = new ClientBufferViewManager(signalProxy(), this);
+    _bufferViewManager = new ClientBufferViewManager(p, this);
     connect(_bufferViewManager, SIGNAL(initDone()), _bufferViewOverlay, SLOT(restore()));
 
     // create AliasManager
     Q_ASSERT(!_aliasManager);
     _aliasManager = new ClientAliasManager(this);
     connect(aliasManager(), SIGNAL(initDone()), SLOT(sendBufferedUserInput()));
-    signalProxy()->synchronize(aliasManager());
+    p->synchronize(aliasManager());
 
     // create NetworkConfig
     Q_ASSERT(!_networkConfig);
     _networkConfig = new NetworkConfig("GlobalNetworkConfig", this);
-    signalProxy()->synchronize(networkConfig());
+    p->synchronize(networkConfig());
 
     // create IgnoreListManager
     Q_ASSERT(!_ignoreListManager);
     _ignoreListManager = new ClientIgnoreListManager(this);
-    signalProxy()->synchronize(ignoreListManager());
+    p->synchronize(ignoreListManager());
+
+    Q_ASSERT(!_transferManager);
+    _transferManager = new ClientTransferManager(this);
+    p->synchronize(transferManager());
 
     // trigger backlog request once all active bufferviews are initialized
     connect(bufferViewOverlay(), SIGNAL(initDone()), this, SLOT(requestInitialBacklog()));
@@ -473,6 +485,12 @@ void Client::setDisconnectedFromCore()
         _ignoreListManager->deleteLater();
         _ignoreListManager = 0;
     }
+
+    if (_transferManager) {
+        _transferManager->deleteLater();
+        _transferManager = 0;
+    }
+
     // we probably don't want to save pending input for reconnect
     _userInputBuffer.clear();
 
@@ -517,7 +535,7 @@ void Client::networkDestroyed()
             break;
         }
         else {
-            netIter++;
+            ++netIter;
         }
     }
 }
@@ -634,6 +652,23 @@ void Client::markBufferAsRead(BufferId id)
 }
 
 
+void Client::changePassword(const QString &oldPassword, const QString &newPassword) {
+    CoreAccount account = currentCoreAccount();
+    account.setPassword(newPassword);
+    coreAccountModel()->createOrUpdateAccount(account);
+    emit instance()->requestPasswordChange(nullptr, account.user(), oldPassword, newPassword);
+}
+
+
+void Client::corePasswordChanged(PeerPtr, bool success)
+{
+    if (success)
+        coreAccountModel()->save();
+    emit passwordChanged(success);
+}
+
+
+#if QT_VERSION < 0x050000
 void Client::logMessage(QtMsgType type, const char *msg)
 {
     fprintf(stderr, "%s\n", msg);
@@ -653,3 +688,26 @@ void Client::logMessage(QtMsgType type, const char *msg)
         emit instance()->logUpdated(msgString);
     }
 }
+#else
+void Client::logMessage(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    Q_UNUSED(context);
+
+    fprintf(stderr, "%s\n", msg.toLocal8Bit().constData());
+    fflush(stderr);
+    if (type == QtFatalMsg) {
+        Quassel::logFatalMessage(msg.toLocal8Bit().constData());
+    }
+    else {
+        QString msgString = QString("%1\n").arg(msg);
+
+        //Check to see if there is an instance around, else we risk recursions
+        //when calling instance() and creating new ones.
+        if (!instanceExists())
+            return;
+
+        instance()->_debugLog << msgString;
+        emit instance()->logUpdated(msgString);
+    }
+}
+#endif

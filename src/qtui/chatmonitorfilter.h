@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -58,6 +58,8 @@ private slots:
     void showHighlightsSettingChanged(const QVariant &newValue);
     void operationModeSettingChanged(const QVariant &newValue);
     void buffersSettingChanged(const QVariant &newValue);
+    void showBacklogSettingChanged(const QVariant &newValue);
+    void includeReadSettingChanged(const QVariant &newValue);
 
 private:
     int _showFields;
@@ -65,6 +67,8 @@ private:
     QList<BufferId> _bufferIds;
     bool _showHighlights;
     int _operationMode;
+    bool _showBacklog;
+    bool _includeRead;
 };
 
 

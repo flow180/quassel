@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -28,7 +28,7 @@ CoreUserSettings::CoreUserSettings(UserId uid) : CoreSettings(QString("CoreUser/
 Identity CoreUserSettings::identity(IdentityId id)
 {
     QVariant v = localValue(QString("Identities/%1").arg(id.toInt()));
-    if (qVariantCanConvert<Identity>(v)) {
+    if (v.canConvert<Identity>()) {
         return v.value<Identity>();
     }
     return Identity();

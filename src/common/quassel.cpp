@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -22,24 +22,32 @@
 
 #include <iostream>
 #include <signal.h>
-#if !defined Q_OS_WIN32 && !defined Q_OS_MAC
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
+#  include <sys/types.h>
+#  include <sys/time.h>
 #  include <sys/resource.h>
 #endif
 
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFileInfo>
+#include <QHostAddress>
 #include <QLibraryInfo>
 #include <QSettings>
 #include <QTranslator>
-#include <QHostAddress>
+#include <QUuid>
 
-#include "message.h"
-#include "identity.h"
-#include "network.h"
 #include "bufferinfo.h"
-#include "types.h"
+#include "identity.h"
+#include "logger.h"
+#include "message.h"
+#include "network.h"
+#include "peer.h"
+#include "protocol.h"
 #include "syncableobject.h"
+#include "types.h"
+
+#include "../../version.h"
 
 Quassel::BuildInfo Quassel::_buildInfo;
 AbstractCliParser *Quassel::_cliParser = 0;
@@ -84,27 +92,28 @@ bool Quassel::init()
 
     if (_handleCrashes) {
         // we have crashhandler for win32 and unix (based on execinfo).
-#if defined(Q_OS_WIN32) || defined(HAVE_EXECINFO)
-# ifndef Q_OS_WIN32
+#if defined(Q_OS_WIN) || defined(HAVE_EXECINFO)
+# ifndef Q_OS_WIN
         // we only handle crashes ourselves if coredumps are disabled
         struct rlimit *limit = (rlimit *)malloc(sizeof(struct rlimit));
         int rc = getrlimit(RLIMIT_CORE, limit);
 
         if (rc == -1 || !((long)limit->rlim_cur > 0 || limit->rlim_cur == RLIM_INFINITY)) {
-# endif /* Q_OS_WIN32 */
+# endif /* Q_OS_WIN */
         signal(SIGABRT, handleSignal);
         signal(SIGSEGV, handleSignal);
-# ifndef Q_OS_WIN32
+# ifndef Q_OS_WIN
         signal(SIGBUS, handleSignal);
     }
     free(limit);
-# endif /* Q_OS_WIN32 */
-#endif /* Q_OS_WIN32 || HAVE_EXECINFO */
+# endif /* Q_OS_WIN */
+#endif /* Q_OS_WIN || HAVE_EXECINFO */
     }
 
     _initialized = true;
     qsrand(QTime(0, 0, 0).secsTo(QTime::currentTime()));
 
+    setupEnvironment();
     registerMetaTypes();
 
     Network::setDefaultCodecForServer("ISO-8859-1");
@@ -185,6 +194,7 @@ void Quassel::registerMetaTypes()
     qRegisterMetaType<MsgId>("MsgId");
 
     qRegisterMetaType<QHostAddress>("QHostAddress");
+    qRegisterMetaType<QUuid>("QUuid");
 
     qRegisterMetaTypeStreamOperators<IdentityId>("IdentityId");
     qRegisterMetaTypeStreamOperators<BufferId>("BufferId");
@@ -192,6 +202,10 @@ void Quassel::registerMetaTypes()
     qRegisterMetaTypeStreamOperators<UserId>("UserId");
     qRegisterMetaTypeStreamOperators<AccountId>("AccountId");
     qRegisterMetaTypeStreamOperators<MsgId>("MsgId");
+
+    qRegisterMetaType<Protocol::SessionState>("Protocol::SessionState");
+    qRegisterMetaType<PeerPtr>("PeerPtr");
+    qRegisterMetaTypeStreamOperators<PeerPtr>("PeerPtr");
 
     // Versions of Qt prior to 4.7 didn't define QVariant as a meta type
     if (!QMetaType::type("QVariant")) {
@@ -201,25 +215,61 @@ void Quassel::registerMetaTypes()
 }
 
 
-void Quassel::setupBuildInfo(const QString &generated)
+void Quassel::setupEnvironment()
 {
-    _buildInfo.applicationName = "Quassel IRC";
+    // On modern Linux systems, XDG_DATA_DIRS contains a list of directories containing application data. This
+    // is, for example, used by Qt for finding icons and other things. In case Quassel is installed in a non-standard
+    // prefix (or run from the build directory), it makes sense to add this to XDG_DATA_DIRS so we don't have to
+    // hack extra search paths into various places.
+#ifdef Q_OS_UNIX
+    QString xdgDataVar = QFile::decodeName(qgetenv("XDG_DATA_DIRS"));
+    if (xdgDataVar.isEmpty())
+        xdgDataVar = QLatin1String("/usr/local/share:/usr/share"); // sane defaults
+
+    QStringList xdgDirs = xdgDataVar.split(QLatin1Char(':'), QString::SkipEmptyParts);
+
+    // Add our install prefix (if we're not in a bindir, this just adds the current workdir)
+    QString appDir = QCoreApplication::applicationDirPath();
+    int binpos = appDir.lastIndexOf("/bin");
+    if (binpos >= 0) {
+        appDir.replace(binpos, 4, "/share");
+        xdgDirs.append(appDir);
+        // Also append apps/quassel, this is only for QIconLoader to find icons there
+        xdgDirs.append(appDir + "/apps/quassel");
+    } else
+        xdgDirs.append(appDir);  // build directory is always the last fallback
+
+    xdgDirs.removeDuplicates();
+
+    qputenv("XDG_DATA_DIRS", QFile::encodeName(xdgDirs.join(":")));
+#endif
+}
+
+
+void Quassel::setupBuildInfo()
+{
+    _buildInfo.applicationName = "quassel";
     _buildInfo.coreApplicationName = "quasselcore";
     _buildInfo.clientApplicationName = "quasselclient";
     _buildInfo.organizationName = "Quassel Project";
     _buildInfo.organizationDomain = "quassel-irc.org";
 
-    QStringList gen = generated.split(',');
-    Q_ASSERT(gen.count() == 10);
-    _buildInfo.baseVersion = gen[0];
-    _buildInfo.generatedVersion = gen[1];
-    _buildInfo.isSourceDirty = !gen[2].isEmpty();
-    _buildInfo.commitHash = gen[3];
-    _buildInfo.commitDate = gen[4].toUInt();
-    _buildInfo.protocolVersion = gen[5].toUInt();
-    _buildInfo.clientNeedsProtocol = gen[6].toUInt();
-    _buildInfo.coreNeedsProtocol = gen[7].toUInt();
-    _buildInfo.buildDate = QString("%1 %2").arg(gen[8], gen[9]);
+    _buildInfo.protocolVersion = 10; // FIXME: deprecated, will be removed
+
+    _buildInfo.baseVersion = QUASSEL_VERSION_STRING;
+    _buildInfo.generatedVersion = GIT_DESCRIBE;
+
+    // This will be imprecise for incremental builds not touching this file, but we really don't want to always recompile
+    _buildInfo.buildDate = QString("%1 %2").arg(__DATE__, __TIME__);
+
+    // Check if we got a commit hash
+    if (!QString(GIT_HEAD).isEmpty())
+        _buildInfo.commitHash = GIT_HEAD;
+    else if (!QString(DIST_HASH).contains("Format")) {
+        _buildInfo.commitHash = DIST_HASH;
+        _buildInfo.commitDate = QString(DIST_DATE).toUInt();
+    }
+
     // create a nice version string
     if (_buildInfo.generatedVersion.isEmpty()) {
         if (!_buildInfo.commitHash.isEmpty()) {
@@ -234,26 +284,23 @@ void Quassel::setupBuildInfo(const QString &generated)
         }
         else {
             // we only have a base version :(
-            _buildInfo.plainVersionString = QString("v%1 (unknown rev)").arg(_buildInfo.baseVersion);
+            _buildInfo.plainVersionString = QString("v%1 (unknown revision)").arg(_buildInfo.baseVersion);
         }
     }
     else {
         // analyze what we got from git-describe
-        QRegExp rx("(.*)-(\\d+)-g([0-9a-f]+)$");
+        QRegExp rx("(.*)-(\\d+)-g([0-9a-f]+)(-dirty)?$");
         if (rx.exactMatch(_buildInfo.generatedVersion)) {
             QString distance = rx.cap(2) == "0" ? QString() : QString("%1+%2 ").arg(rx.cap(1), rx.cap(2));
             _buildInfo.plainVersionString = QString("v%1 (%2git-%3%4)")
-                                            .arg(_buildInfo.baseVersion, distance, rx.cap(3))
-                                            .arg(_buildInfo.isSourceDirty ? "*" : "");
+                                            .arg(_buildInfo.baseVersion, distance, rx.cap(3), rx.cap(4));
             if (!_buildInfo.commitHash.isEmpty()) {
                 _buildInfo.fancyVersionString = QString("v%1 (%2git-<a href=\"http://git.quassel-irc.org/?p=quassel.git;a=commit;h=%5\">%3</a>%4)")
-                                                .arg(_buildInfo.baseVersion, distance, rx.cap(3))
-                                                .arg(_buildInfo.isSourceDirty ? "*" : "")
-                                                .arg(_buildInfo.commitHash);
+                                                .arg(_buildInfo.baseVersion, distance, rx.cap(3), rx.cap(4), _buildInfo.commitHash);
             }
         }
         else {
-            _buildInfo.plainVersionString = QString("v%1 (invalid rev)").arg(_buildInfo.baseVersion);
+            _buildInfo.plainVersionString = QString("v%1 (invalid revision)").arg(_buildInfo.baseVersion);
         }
     }
     if (_buildInfo.fancyVersionString.isEmpty())
@@ -275,7 +322,7 @@ void Quassel::handleSignal(int sig)
         break;
     case SIGABRT:
     case SIGSEGV:
-#ifndef Q_OS_WIN32
+#ifndef Q_OS_WIN
     case SIGBUS:
 #endif
         logBacktrace(coreDumpFileName());
@@ -343,12 +390,12 @@ QString Quassel::configDirPath()
         _configDirPath = Quassel::optionValue("configdir");
     }
     else {
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
         // On Mac, the path is always the same
         _configDirPath = QDir::homePath() + "/Library/Application Support/Quassel/";
 #else
         // We abuse QSettings to find us a sensible path on the other platforms
-#  ifdef Q_WS_WIN
+#  ifdef Q_OS_WIN
         // don't use the registry
         QSettings::Format format = QSettings::IniFormat;
 #  else
@@ -357,7 +404,7 @@ QString Quassel::configDirPath()
         QSettings s(format, QSettings::UserScope, QCoreApplication::organizationDomain(), buildInfo().applicationName);
         QFileInfo fileInfo(s.fileName());
         _configDirPath = fileInfo.dir().absolutePath();
-#endif /* Q_WS_MAC */
+#endif /* Q_OS_MAC */
     }
 
     if (!_configDirPath.endsWith(QDir::separator()) && !_configDirPath.endsWith('/'))
@@ -383,43 +430,50 @@ QStringList Quassel::dataDirPaths()
 
 QStringList Quassel::findDataDirPaths() const
 {
-    QStringList dataDirNames = QString(qgetenv("XDG_DATA_DIRS")).split(':', QString::SkipEmptyParts);
+    // We don't use QStandardPaths for now, as we still need to provide fallbacks for Qt4 and
+    // want to stay consistent.
 
-    if (!dataDirNames.isEmpty()) {
-        for (int i = 0; i < dataDirNames.count(); i++)
-            dataDirNames[i].append("/apps/quassel/");
-    }
-    else {
-        // Provide a fallback
-#ifdef Q_OS_WIN32
-        dataDirNames << qgetenv("APPDATA") + QCoreApplication::organizationDomain() + "/share/apps/quassel/"
-                     << qgetenv("APPDATA") + QCoreApplication::organizationDomain()
-                     << QCoreApplication::applicationDirPath();
-    }
-#elif defined Q_WS_MAC
-        dataDirNames << QDir::homePath() + "/Library/Application Support/Quassel/"
-                     << QCoreApplication::applicationDirPath();
-    }
+    QStringList dataDirNames;
+#ifdef Q_OS_WIN
+    dataDirNames << qgetenv("APPDATA") + QCoreApplication::organizationDomain() + "/share/apps/quassel/"
+                 << qgetenv("APPDATA") + QCoreApplication::organizationDomain()
+                 << QCoreApplication::applicationDirPath();
+#elif defined Q_OS_MAC
+    dataDirNames << QDir::homePath() + "/Library/Application Support/Quassel/"
+                 << QCoreApplication::applicationDirPath();
 #else
-        dataDirNames.append("/usr/share/apps/quassel/");
-    }
-    // on UNIX, we always check our install prefix
-    QString appDir = QCoreApplication::applicationDirPath();
-    int binpos = appDir.lastIndexOf("/bin");
-    if (binpos >= 0) {
-        appDir.replace(binpos, 4, "/share");
-        appDir.append("/apps/quassel/");
-        if (!dataDirNames.contains(appDir))
-            dataDirNames.append(appDir);
-    }
+    // Linux et al
+
+    // XDG_DATA_HOME is the location for users to override system-installed files, usually in .local/share
+    // This should thus come first.
+    QString xdgDataHome = QFile::decodeName(qgetenv("XDG_DATA_HOME"));
+    if (xdgDataHome.isEmpty())
+        xdgDataHome = QDir::homePath() + QLatin1String("/.local/share");
+    dataDirNames << xdgDataHome;
+
+    // Now whatever is configured through XDG_DATA_DIRS
+    QString xdgDataDirs = QFile::decodeName(qgetenv("XDG_DATA_DIRS"));
+    if (xdgDataDirs.isEmpty())
+        dataDirNames << "/usr/local/share" << "/usr/share";
+    else
+        dataDirNames << xdgDataDirs.split(':', QString::SkipEmptyParts);
+
+    // Just in case, also check our install prefix
+    dataDirNames << QCoreApplication::applicationDirPath() + "/../share";
+
+    // Normalize and append our application name
+    for (int i = 0; i < dataDirNames.count(); i++)
+        dataDirNames[i] = QDir::cleanPath(dataDirNames.at(i)) + "/quassel/";
+
 #endif
 
-    // add resource path and workdir just in case
-    dataDirNames << QCoreApplication::applicationDirPath() + "/data/"
-                 << ":/data/";
+    // Add resource path and workdir just in case.
+    // Workdir should have precedence
+    dataDirNames.prepend(QCoreApplication::applicationDirPath() + "/data/");
+    dataDirNames.append(":/data/");
 
-    // append trailing '/' and check for existence
-    QStringList::Iterator iter = dataDirNames.begin();
+    // Append trailing '/' and check for existence
+    auto iter = dataDirNames.begin();
     while (iter != dataDirNames.end()) {
         if (!iter->endsWith(QDir::separator()) && !iter->endsWith('/'))
             iter->append(QDir::separator());
@@ -428,6 +482,8 @@ QStringList Quassel::findDataDirPaths() const
         else
             ++iter;
     }
+
+    dataDirNames.removeDuplicates();
 
     return dataDirNames;
 }
@@ -494,10 +550,15 @@ void Quassel::loadTranslation(const QLocale &locale)
     quasselTranslator->setObjectName("QuasselTr");
     qApp->installTranslator(quasselTranslator);
 
-    QLocale::setDefault(locale);
-
+#if QT_VERSION >= 0x040800 && !defined Q_OS_MAC
+    bool success = qtTranslator->load(locale, QString("qt_"), translationDirPath());
+    if (!success)
+        qtTranslator->load(locale, QString("qt_"), QLibraryInfo::location(QLibraryInfo::TranslationsPath));
+    quasselTranslator->load(locale, QString(""), translationDirPath());
+#else
     bool success = qtTranslator->load(QString("qt_%1").arg(locale.name()), translationDirPath());
     if (!success)
         qtTranslator->load(QString("qt_%1").arg(locale.name()), QLibraryInfo::location(QLibraryInfo::TranslationsPath));
     quasselTranslator->load(QString("%1").arg(locale.name()), translationDirPath());
+#endif
 }

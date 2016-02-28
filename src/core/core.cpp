@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,30 +21,27 @@
 #include <QCoreApplication>
 
 #include "core.h"
+#include "coreauthhandler.h"
 #include "coresession.h"
 #include "coresettings.h"
-#include "internalconnection.h"
+#include "logger.h"
+#include "internalpeer.h"
+#include "network.h"
 #include "postgresqlstorage.h"
 #include "postgresqlldapstorage.h"
 #include "quassel.h"
-#include "signalproxy.h"
 #include "sqlitestorage.h"
 #include "sqliteldapstorage.h"
-#include "network.h"
-#include "logger.h"
-
 #include "util.h"
-
-#include "protocols/legacy/legacyconnection.h"
 
 // migration related
 #include <QFile>
-#ifdef Q_OS_WIN32
+#ifdef Q_OS_WIN
 #  include <windows.h>
 #else
 #  include <unistd.h>
 #  include <termios.h>
-#endif /* Q_OS_WIN32 */
+#endif /* Q_OS_WIN */
 
 #ifdef HAVE_UMASK
 #  include <sys/types.h>
@@ -59,8 +56,8 @@ const int Core::AddClientEventId = QEvent::registerEventType();
 class AddClientEvent : public QEvent
 {
 public:
-    AddClientEvent(RemoteConnection *connection, UserId uid) : QEvent(QEvent::Type(Core::AddClientEventId)), connection(connection), userId(uid) {}
-    RemoteConnection *connection;
+    AddClientEvent(RemotePeer *p, UserId uid) : QEvent(QEvent::Type(Core::AddClientEventId)), peer(p), userId(uid) {}
+    RemotePeer *peer;
     UserId userId;
 };
 
@@ -87,7 +84,8 @@ void Core::destroy()
 
 
 Core::Core()
-    : _storage(0)
+    : QObject(),
+      _storage(0)
 {
 #ifdef HAVE_UMASK
     umask(S_IRWXG | S_IRWXO);
@@ -98,11 +96,11 @@ Core::Core()
 
     // FIXME: MIGRATION 0.3 -> 0.4: Move database and core config to new location
     // Move settings, note this does not delete the old files
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     QSettings newSettings("quassel-irc.org", "quasselcore");
 #else
 
-# ifdef Q_WS_WIN
+# ifdef Q_OS_WIN
     QSettings::Format format = QSettings::IniFormat;
 # else
     QSettings::Format format = QSettings::NativeFormat;
@@ -110,10 +108,10 @@ Core::Core()
     QString newFilePath = Quassel::configDirPath() + "quasselcore"
                           + ((format == QSettings::NativeFormat) ? QLatin1String(".conf") : QLatin1String(".ini"));
     QSettings newSettings(newFilePath, format);
-#endif /* Q_WS_MAC */
+#endif /* Q_OS_MAC */
 
     if (newSettings.value("Config/Version").toUInt() == 0) {
-#   ifdef Q_WS_MAC
+#   ifdef Q_OS_MAC
         QString org = "quassel-irc.org";
 #   else
         QString org = "Quassel Project";
@@ -126,10 +124,10 @@ Core::Core()
             newSettings.setValue("Config/Version", 1);
             qWarning() << "*   Your core settings have been migrated to" << newSettings.fileName();
 
-#ifndef Q_WS_MAC /* we don't need to move the db and cert for mac */
-#ifdef Q_OS_WIN32
+#ifndef Q_OS_MAC /* we don't need to move the db and cert for mac */
+#ifdef Q_OS_WIN
             QString quasselDir = qgetenv("APPDATA") + "/quassel/";
-#elif defined Q_WS_MAC
+#elif defined Q_OS_MAC
             QString quasselDir = QDir::homePath() + "/Library/Application Support/Quassel/";
 #else
             QString quasselDir = QDir::homePath() + "/.quassel/";
@@ -157,7 +155,7 @@ Core::Core()
                 else
                     qWarning() << "!!! Moving your certificate has failed. Please move it manually into" << Quassel::configDirPath();
             }
-#endif /* !Q_WS_MAC */
+#endif /* !Q_OS_MAC */
             qWarning() << "*** Migration completed.\n\n";
         }
     }
@@ -181,7 +179,9 @@ Core::Core()
 void Core::init()
 {
     CoreSettings cs;
-    _configured = initStorage(cs.storageSettings().toMap());
+    // legacy
+    QVariantMap dbsettings = cs.storageSettings().toMap();
+    _configured = initStorage(dbsettings.value("Backend").toString(), dbsettings.value("ConnectionProperties").toMap());
 
     if (Quassel::isOptionSet("select-backend")) {
         selectBackend(Quassel::optionValue("select-backend"));
@@ -200,13 +200,13 @@ void Core::init()
     }
 
     if (Quassel::isOptionSet("add-user")) {
-        createUser();
-        exit(0);
+        exit(createUser() ? EXIT_SUCCESS : EXIT_FAILURE);
+
     }
 
     if (Quassel::isOptionSet("change-userpass")) {
-        changeUserPass(Quassel::optionValue("change-userpass"));
-        exit(0);
+        exit(changeUserPass(Quassel::optionValue("change-userpass")) ?
+                       EXIT_SUCCESS : EXIT_FAILURE);
     }
 
     connect(&_server, SIGNAL(newConnection()), this, SLOT(incomingConnection()));
@@ -220,10 +220,11 @@ void Core::init()
 
 Core::~Core()
 {
-    foreach(RemoteConnection *connection, clientInfo.keys()) {
-        connection->close(); // disconnect non authed clients
+    // FIXME do we need more cleanup for handlers?
+    foreach(CoreAuthHandler *handler, _connectingClients) {
+        handler->deleteLater(); // disconnect non authed clients
     }
-    qDeleteAll(sessions);
+    qDeleteAll(_sessions);
     qDeleteAll(_storageBackends);
 }
 
@@ -235,7 +236,8 @@ void Core::saveState()
     CoreSettings s;
     QVariantMap state;
     QVariantList activeSessions;
-    foreach(UserId user, instance()->sessions.keys()) activeSessions << QVariant::fromValue<UserId>(user);
+    foreach(UserId user, instance()->_sessions.keys())
+        activeSessions << QVariant::fromValue<UserId>(user);
     state["CoreStateVersion"] = 1;
     state["ActiveSessions"] = activeSessions;
     s.setCoreState(state);
@@ -248,7 +250,7 @@ void Core::restoreState()
         // qWarning() << qPrintable(tr("Cannot restore a state for an unconfigured core!"));
         return;
     }
-    if (instance()->sessions.count()) {
+    if (instance()->_sessions.count()) {
         qWarning() << qPrintable(tr("Calling restoreState() even though active sessions exist!"));
         return;
     }
@@ -266,46 +268,54 @@ void Core::restoreState()
         quInfo() << "Restoring previous core state...";
         foreach(QVariant v, activeSessions) {
             UserId user = v.value<UserId>();
-            instance()->createSession(user, true);
+            instance()->sessionForUser(user, true);
         }
     }
 }
 
 
 /*** Core Setup ***/
+
+QString Core::setup(const QString &adminUser, const QString &adminPassword, const QString &backend, const QVariantMap &setupData)
+{
+    return instance()->setupCore(adminUser, adminPassword, backend, setupData);
+}
+
+
+QString Core::setupCore(const QString &adminUser, const QString &adminPassword, const QString &backend, const QVariantMap &setupData)
+{
+    if (_configured)
+        return tr("Core is already configured! Not configuring again...");
+
+    if (adminUser.isEmpty() || adminPassword.isEmpty()) {
+        return tr("Admin user or password not set.");
+    }
+    if (!(_configured = initStorage(backend, setupData, true))) {
+        return tr("Could not setup storage!");
+    }
+
+    saveBackendSettings(backend, setupData);
+
+    quInfo() << qPrintable(tr("Creating admin user..."));
+    _storage->addUser(adminUser, adminPassword);
+    startListening(); // TODO check when we need this
+    return QString();
+}
+
+
 QString Core::setupCoreForInternalUsage()
 {
     Q_ASSERT(!_storageBackends.isEmpty());
-    QVariantMap setupData;
+
     qsrand(QDateTime::currentDateTime().toTime_t());
     int pass = 0;
     for (int i = 0; i < 10; i++) {
         pass *= 10;
         pass += qrand() % 10;
     }
-    setupData["AdminUser"] = "AdminUser";
-    setupData["AdminPasswd"] = QString::number(pass);
-    setupData["Backend"] = QString("SQLite"); // mono client currently needs sqlite
-    return setupCore(setupData);
-}
 
-
-QString Core::setupCore(QVariantMap setupData)
-{
-    QString user = setupData.take("AdminUser").toString();
-    QString password = setupData.take("AdminPasswd").toString();
-    if (user.isEmpty() || password.isEmpty()) {
-        return tr("Admin user or password not set.");
-    }
-    if (_configured || !(_configured = initStorage(setupData, true))) {
-        return tr("Could not setup storage!");
-    }
-    CoreSettings s;
-    s.setStorageSettings(setupData);
-    quInfo() << qPrintable(tr("Creating admin user..."));
-    _storage->addUser(user, password);
-    startListening(); // TODO check when we need this
-    return QString();
+    // mono client currently needs sqlite
+    return setupCore("AdminUser", QString::number(pass), "SQLite", QVariantMap());
 }
 
 
@@ -351,7 +361,7 @@ void Core::unregisterStorageBackend(Storage *backend)
 
 // old db settings:
 // "Type" => "sqlite"
-bool Core::initStorage(const QString &backend, QVariantMap settings, bool setup)
+bool Core::initStorage(const QString &backend, const QVariantMap &settings, bool setup)
 {
     _storage = 0;
 
@@ -375,13 +385,10 @@ bool Core::initStorage(const QString &backend, QVariantMap settings, bool setup)
             return false;  // trigger setup process
         if (storage->setup(settings))
             return initStorage(backend, settings, false);
-    // if setup wasn't successfull we mark the backend as unavailable
+    // if initialization wasn't successful, we quit to keep from coming up unconfigured
     case Storage::NotAvailable:
-        qCritical() << "Selected storage backend is not available:" << backend;
-        storage->deleteLater();
-        _storageBackends.remove(backend);
-        storage = 0;
-        return false;
+        qCritical() << "FATAL: Selected storage backend is not available:" << backend;
+        exit(EXIT_FAILURE);
     case Storage::IsReady:
         // delete all other backends
         _storageBackends.remove(backend);
@@ -390,12 +397,6 @@ bool Core::initStorage(const QString &backend, QVariantMap settings, bool setup)
     }
     _storage = storage;
     return true;
-}
-
-
-bool Core::initStorage(QVariantMap dbSettings, bool setup)
-{
-    return initStorage(dbSettings["Backend"].toString(), dbSettings["ConnectionProperties"].toMap(), setup);
 }
 
 
@@ -419,6 +420,17 @@ bool Core::createNetwork(UserId user, NetworkInfo &info)
 
 
 /*** Network Management ***/
+
+bool Core::sslSupported()
+{
+#ifdef HAVE_SSL
+    SslServer *sslServer = qobject_cast<SslServer *>(&instance()->_server);
+    return sslServer && sslServer->isCertValid();
+#else
+    return false;
+#endif
+}
+
 
 bool Core::startListening()
 {
@@ -522,13 +534,14 @@ void Core::incomingConnection()
     Q_ASSERT(server);
     while (server->hasPendingConnections()) {
         QTcpSocket *socket = server->nextPendingConnection();
-        RemoteConnection *connection = new LegacyConnection(socket, this);
 
-        connect(connection, SIGNAL(disconnected()), SLOT(clientDisconnected()));
-        connect(connection, SIGNAL(dataReceived(QVariant)), SLOT(processClientMessage(QVariant)));
-        connect(connection, SIGNAL(error(QAbstractSocket::SocketError)), SLOT(socketError(QAbstractSocket::SocketError)));
+        CoreAuthHandler *handler = new CoreAuthHandler(socket, this);
+        _connectingClients.insert(handler);
 
-        clientInfo.insert(connection, QVariantMap());
+        connect(handler, SIGNAL(disconnected()), SLOT(clientDisconnected()));
+        connect(handler, SIGNAL(socketError(QAbstractSocket::SocketError,QString)), SLOT(socketError(QAbstractSocket::SocketError,QString)));
+        connect(handler, SIGNAL(handshakeComplete(RemotePeer*,UserId)), SLOT(setupClientSession(RemotePeer*,UserId)));
+
         quInfo() << qPrintable(tr("Client connected from"))  << qPrintable(socket->peerAddress().toString());
 
         if (!_configured) {
@@ -538,168 +551,15 @@ void Core::incomingConnection()
 }
 
 
-void Core::processClientMessage(const QVariant &data)
-{
-    RemoteConnection *connection = qobject_cast<RemoteConnection *>(sender());
-    if (!connection) {
-        qWarning() << Q_FUNC_INFO << "Message not sent by RemoteConnection!";
-        return;
-    }
-
-    QVariantMap msg = data.toMap();
-    if (!msg.contains("MsgType")) {
-        // Client is way too old, does not even use the current init format
-        qWarning() << qPrintable(tr("Antique client trying to connect... refusing."));
-        connection->close();
-        return;
-    }
-
-    // OK, so we have at least an init message format we can understand
-    if (msg["MsgType"] == "ClientInit") {
-        QVariantMap reply;
-
-        // Just version information -- check it!
-        uint ver = msg["ProtocolVersion"].toUInt();
-        if (ver < Quassel::buildInfo().coreNeedsProtocol) {
-            reply["MsgType"] = "ClientInitReject";
-            reply["Error"] = tr("<b>Your Quassel Client is too old!</b><br>"
-                                "This core needs at least client/core protocol version %1.<br>"
-                                "Please consider upgrading your client.").arg(Quassel::buildInfo().coreNeedsProtocol);
-            connection->writeSocketData(reply);
-            qWarning() << qPrintable(tr("Client")) << connection->description() << qPrintable(tr("too old, rejecting."));
-            connection->close();
-            return;
-        }
-
-        reply["ProtocolVersion"] = Quassel::buildInfo().protocolVersion;
-        reply["CoreVersion"] = Quassel::buildInfo().fancyVersionString;
-        reply["CoreDate"] = Quassel::buildInfo().buildDate;
-        reply["CoreStartTime"] = startTime(); // v10 clients don't necessarily parse this, see below
-
-        // FIXME: newer clients no longer use the hardcoded CoreInfo (for now), since it gets the
-        //        time zone wrong. With the next protocol bump (10 -> 11), we should remove this
-        //        or make it properly configurable.
-
-        int uptime = startTime().secsTo(QDateTime::currentDateTime().toUTC());
-        int updays = uptime / 86400; uptime %= 86400;
-        int uphours = uptime / 3600; uptime %= 3600;
-        int upmins = uptime / 60;
-        reply["CoreInfo"] = tr("<b>Quassel Core Version %1</b><br>"
-                               "Built: %2<br>"
-                               "Up %3d%4h%5m (since %6)").arg(Quassel::buildInfo().fancyVersionString)
-                            .arg(Quassel::buildInfo().buildDate)
-                            .arg(updays).arg(uphours, 2, 10, QChar('0')).arg(upmins, 2, 10, QChar('0')).arg(startTime().toString(Qt::TextDate));
-
-        reply["CoreFeatures"] = (int)Quassel::features();
-
-#ifdef HAVE_SSL
-        SslServer *sslServer = qobject_cast<SslServer *>(&_server);
-        QSslSocket *sslSocket = qobject_cast<QSslSocket *>(connection->socket());
-        bool supportSsl = sslServer && sslSocket && sslServer->isCertValid();
-#else
-        bool supportSsl = false;
-#endif
-
-#ifndef QT_NO_COMPRESS
-        bool supportsCompression = true;
-#else
-        bool supportsCompression = false;
-#endif
-
-        reply["SupportSsl"] = supportSsl;
-        reply["SupportsCompression"] = supportsCompression;
-        // switch to ssl/compression after client has been informed about our capabilities (see below)
-
-        reply["LoginEnabled"] = true;
-
-        // check if we are configured, start wizard otherwise
-        if (!_configured) {
-            reply["Configured"] = false;
-            QList<QVariant> backends;
-            foreach(Storage *backend, _storageBackends.values()) {
-                QVariantMap v;
-                v["DisplayName"] = backend->displayName();
-                v["Description"] = backend->description();
-                v["SetupKeys"] = backend->setupKeys();
-                v["SetupDefaults"] = backend->setupDefaults();
-                backends.append(v);
-            }
-            reply["StorageBackends"] = backends;
-            reply["LoginEnabled"] = false;
-        }
-        else {
-            reply["Configured"] = true;
-        }
-        clientInfo[connection] = msg; // store for future reference
-        reply["MsgType"] = "ClientInitAck";
-        connection->writeSocketData(reply);
-        connection->socket()->flush(); // ensure that the write cache is flushed before we switch to ssl
-
-#ifdef HAVE_SSL
-        // after we told the client that we are ssl capable we switch to ssl mode
-        if (supportSsl && msg["UseSsl"].toBool()) {
-            qDebug() << qPrintable(tr("Starting TLS for Client:"))  << connection->description();
-            connect(sslSocket, SIGNAL(sslErrors(const QList<QSslError> &)), SLOT(sslErrors(const QList<QSslError> &)));
-            sslSocket->startServerEncryption();
-        }
-#endif
-
-#ifndef QT_NO_COMPRESS
-        if (supportsCompression && msg["UseCompression"].toBool()) {
-            connection->socket()->setProperty("UseCompression", true);
-            qDebug() << "Using compression for Client:" << qPrintable(connection->socket()->peerAddress().toString());
-        }
-#endif
-    }
-    else {
-        // for the rest, we need an initialized connection
-        if (!clientInfo.contains(connection)) {
-            QVariantMap reply;
-            reply["MsgType"] = "ClientLoginReject";
-            reply["Error"] = tr("<b>Client not initialized!</b><br>You need to send an init message before trying to login.");
-            connection->writeSocketData(reply);
-            qWarning() << qPrintable(tr("Client")) << qPrintable(connection->socket()->peerAddress().toString()) << qPrintable(tr("did not send an init message before trying to login, rejecting."));
-            connection->close(); return;
-        }
-        if (msg["MsgType"] == "CoreSetupData") {
-            QVariantMap reply;
-            QString result = setupCore(msg["SetupData"].toMap());
-            if (!result.isEmpty()) {
-                reply["MsgType"] = "CoreSetupReject";
-                reply["Error"] = result;
-            }
-            else {
-                reply["MsgType"] = "CoreSetupAck";
-            }
-            connection->writeSocketData(reply);
-        }
-        else if (msg["MsgType"] == "ClientLogin") {
-            QVariantMap reply;
-            UserId uid = _storage->validateUser(msg["User"].toString(), msg["Password"].toString());
-            if (uid == 0) {
-                reply["MsgType"] = "ClientLoginReject";
-                reply["Error"] = tr("<b>Invalid username or password!</b><br>The username/password combination you supplied could not be found in the database.");
-                connection->writeSocketData(reply);
-                return;
-            }
-            reply["MsgType"] = "ClientLoginAck";
-            connection->writeSocketData(reply);
-            quInfo() << qPrintable(tr("Client")) << qPrintable(connection->socket()->peerAddress().toString()) << qPrintable(tr("initialized and authenticated successfully as \"%1\" (UserId: %2).").arg(msg["User"].toString()).arg(uid.toInt()));
-            setupClientSession(connection, uid);
-        }
-    }
-}
-
-
 // Potentially called during the initialization phase (before handing the connection off to the session)
 void Core::clientDisconnected()
 {
-    RemoteConnection *connection = qobject_cast<RemoteConnection *>(sender());
-    Q_ASSERT(connection);
+    CoreAuthHandler *handler = qobject_cast<CoreAuthHandler *>(sender());
+    Q_ASSERT(handler);
 
-    quInfo() << qPrintable(tr("Non-authed client disconnected.")) << qPrintable(connection->socket()->peerAddress().toString());
-    clientInfo.remove(connection);
-    connection->deleteLater();
+    quInfo() << qPrintable(tr("Non-authed client disconnected:")) << qPrintable(handler->socket()->peerAddress().toString());
+    _connectingClients.remove(handler);
+    handler->deleteLater();
 
     // make server listen again if still not configured
     if (!_configured) {
@@ -711,30 +571,22 @@ void Core::clientDisconnected()
 }
 
 
-void Core::setupClientSession(RemoteConnection *connection, UserId uid)
+void Core::setupClientSession(RemotePeer *peer, UserId uid)
 {
+    CoreAuthHandler *handler = qobject_cast<CoreAuthHandler *>(sender());
+    Q_ASSERT(handler);
+
     // From now on everything is handled by the client session
-    disconnect(connection, 0, this, 0);
-    connection->socket()->flush();
-    clientInfo.remove(connection);
+    disconnect(handler, 0, this, 0);
+    _connectingClients.remove(handler);
+    handler->deleteLater();
 
     // Find or create session for validated user
-    SessionThread *session;
-    if (sessions.contains(uid)) {
-        session = sessions[uid];
-    }
-    else {
-        session = createSession(uid);
-        if (!session) {
-            qWarning() << qPrintable(tr("Could not initialize session for client:")) << qPrintable(connection->socket()->peerAddress().toString());
-            connection->close();
-            return;
-        }
-    }
+    sessionForUser(uid);
 
     // as we are currently handling an event triggered by incoming data on this socket
     // it is unsafe to directly move the socket to the client thread.
-    QCoreApplication::postEvent(this, new AddClientEvent(connection, uid));
+    QCoreApplication::postEvent(this, new AddClientEvent(peer, uid));
 }
 
 
@@ -742,27 +594,21 @@ void Core::customEvent(QEvent *event)
 {
     if (event->type() == AddClientEventId) {
         AddClientEvent *addClientEvent = static_cast<AddClientEvent *>(event);
-        addClientHelper(addClientEvent->connection, addClientEvent->userId);
+        addClientHelper(addClientEvent->peer, addClientEvent->userId);
         return;
     }
 }
 
 
-void Core::addClientHelper(RemoteConnection *connection, UserId uid)
+void Core::addClientHelper(RemotePeer *peer, UserId uid)
 {
     // Find or create session for validated user
-    if (!sessions.contains(uid)) {
-        qWarning() << qPrintable(tr("Could not find a session for client:")) << qPrintable(connection->socket()->peerAddress().toString());
-        connection->close();
-        return;
-    }
-
-    SessionThread *session = sessions[uid];
-    session->addClient(connection);
+    SessionThread *session = sessionForUser(uid);
+    session->addClient(peer);
 }
 
 
-void Core::setupInternalClientSession(InternalConnection *clientConnection)
+void Core::setupInternalClientSession(InternalPeer *clientPeer)
 {
     if (!_configured) {
         stopListening();
@@ -778,51 +624,46 @@ void Core::setupInternalClientSession(InternalConnection *clientConnection)
         return;
     }
 
-    InternalConnection *coreConnection = new InternalConnection(this);
-    coreConnection->setPeer(clientConnection);
-    clientConnection->setPeer(coreConnection);
+    InternalPeer *corePeer = new InternalPeer(this);
+    corePeer->setPeer(clientPeer);
+    clientPeer->setPeer(corePeer);
 
     // Find or create session for validated user
-    SessionThread *sessionThread;
-    if (sessions.contains(uid))
-        sessionThread = sessions[uid];
-    else
-        sessionThread = createSession(uid);
-
-    sessionThread->addClient(coreConnection);
+    SessionThread *sessionThread = sessionForUser(uid);
+    sessionThread->addClient(corePeer);
 }
 
 
-SessionThread *Core::createSession(UserId uid, bool restore)
+SessionThread *Core::sessionForUser(UserId uid, bool restore)
 {
-    if (sessions.contains(uid)) {
-        qWarning() << "Calling createSession() when a session for the user already exists!";
-        return 0;
+    if (_sessions.contains(uid))
+        return _sessions[uid];
+
+    SessionThread *session = new SessionThread(uid, restore, this);
+    _sessions[uid] = session;
+    session->start();
+    return session;
+}
+
+
+void Core::socketError(QAbstractSocket::SocketError err, const QString &errorString)
+{
+    qWarning() << QString("Socket error %1: %2").arg(err).arg(errorString);
+}
+
+
+QVariantList Core::backendInfo()
+{
+    QVariantList backends;
+    foreach(const Storage *backend, instance()->_storageBackends.values()) {
+        QVariantMap v;
+        v["DisplayName"] = backend->displayName();
+        v["Description"] = backend->description();
+        v["SetupKeys"] = backend->setupKeys();
+        v["SetupDefaults"] = backend->setupDefaults();
+        backends.append(v);
     }
-    SessionThread *sess = new SessionThread(uid, restore, this);
-    sessions[uid] = sess;
-    sess->start();
-    return sess;
-}
-
-
-#ifdef HAVE_SSL
-void Core::sslErrors(const QList<QSslError> &errors)
-{
-    Q_UNUSED(errors);
-    QSslSocket *socket = qobject_cast<QSslSocket *>(sender());
-    if (socket)
-        socket->ignoreSslErrors();
-}
-
-
-#endif
-
-void Core::socketError(QAbstractSocket::SocketError err)
-{
-    RemoteConnection *connection = qobject_cast<RemoteConnection *>(sender());
-    if (connection && err != QAbstractSocket::RemoteHostClosedError)
-        qWarning() << "Core::socketError()" << connection->socket() << err << connection->socket()->errorString();
+    return backends;
 }
 
 
@@ -902,7 +743,7 @@ bool Core::selectBackend(const QString &backend)
 }
 
 
-void Core::createUser()
+bool Core::createUser()
 {
     QTextStream out(stdout);
     QTextStream in(stdin);
@@ -924,30 +765,32 @@ void Core::createUser()
 
     if (password != password2) {
         qWarning() << "Passwords don't match!";
-        return;
+        return false;
     }
     if (password.isEmpty()) {
         qWarning() << "Password is empty!";
-        return;
+        return false;
     }
 
     if (_configured && _storage->addUser(username, password).isValid()) {
         out << "Added user " << username << " successfully!" << endl;
+        return true;
     }
     else {
         qWarning() << "Unable to add user:" << qPrintable(username);
+        return false;
     }
 }
 
 
-void Core::changeUserPass(const QString &username)
+bool Core::changeUserPass(const QString &username)
 {
     QTextStream out(stdout);
     QTextStream in(stdin);
     UserId userId = _storage->getUserId(username);
     if (!userId.isValid()) {
         out << "User " << username << " does not exist." << endl;
-        return;
+        return false;
     }
 
     out << "Change password for user: " << username << endl;
@@ -965,19 +808,30 @@ void Core::changeUserPass(const QString &username)
 
     if (password != password2) {
         qWarning() << "Passwords don't match!";
-        return;
+        return false;
     }
     if (password.isEmpty()) {
         qWarning() << "Password is empty!";
-        return;
+        return false;
     }
 
     if (_configured && _storage->updateUser(userId, password)) {
         out << "Password changed successfully!" << endl;
+        return true;
     }
     else {
         qWarning() << "Failed to change password!";
+        return false;
     }
+}
+
+
+bool Core::changeUserPassword(UserId userId, const QString &password)
+{
+    if (!isConfigured() || !userId.isValid())
+        return false;
+
+    return instance()->_storage->updateUser(userId, password);
 }
 
 
@@ -1071,7 +925,7 @@ QVariantMap Core::promptForSettings(const Storage *storage)
 }
 
 
-#ifdef Q_OS_WIN32
+#ifdef Q_OS_WIN
 void Core::stdInEcho(bool on)
 {
     HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
@@ -1098,4 +952,4 @@ void Core::stdInEcho(bool on)
 }
 
 
-#endif /* Q_OS_WIN32 */
+#endif /* Q_OS_WIN */

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -129,7 +129,8 @@ UserId SqliteStorage::addUser(const QString &user, const QString &password)
         QSqlQuery query(db);
         query.prepare(queryString("insert_quasseluser"));
         query.bindValue(":username", user);
-        query.bindValue(":password", cryptedPassword(password));
+        query.bindValue(":password", hashPassword(password));
+        query.bindValue(":hashversion", Storage::HashVersion::Latest);
         lockForWrite();
         safeExec(query);
         if (query.lastError().isValid() && query.lastError().number() == 19) { // user already exists - sadly 19 seems to be the general constraint violation error...
@@ -158,7 +159,8 @@ bool SqliteStorage::updateUser(UserId user, const QString &password)
         QSqlQuery query(db);
         query.prepare(queryString("update_userpassword"));
         query.bindValue(":userid", user.toInt());
-        query.bindValue(":password", cryptedPassword(password));
+        query.bindValue(":password", hashPassword(password));
+        query.bindValue(":hashversion", Storage::HashVersion::Latest);
         lockForWrite();
         safeExec(query);
         success = query.numRowsAffected() != 0;
@@ -190,23 +192,30 @@ void SqliteStorage::renameUser(UserId user, const QString &newName)
 UserId SqliteStorage::validateUser(const QString &user, const QString &password)
 {
     UserId userId;
+    QString hashedPassword;
+    Storage::HashVersion hashVersion;
 
     {
         QSqlQuery query(logDb());
         query.prepare(queryString("select_authuser"));
         query.bindValue(":username", user);
-        query.bindValue(":password", cryptedPassword(password));
 
         lockForRead();
         safeExec(query);
 
         if (query.first()) {
             userId = query.value(0).toInt();
+            hashedPassword = query.value(1).toString();
+            hashVersion = static_cast<Storage::HashVersion>(query.value(2).toInt());
         }
     }
     unlock();
 
-    return userId;
+    UserId returnUserId;
+    if (userId != 0 && checkHashedPassword(userId, password, hashedPassword, hashVersion)) {
+        returnUserId = userId;
+    }
+    return returnUserId;
 }
 
 
@@ -828,9 +837,9 @@ QList<NetworkInfo> SqliteStorage::networks(UserId user)
                 net.networkId = networksQuery.value(0).toInt();
                 net.networkName = networksQuery.value(1).toString();
                 net.identity = networksQuery.value(2).toInt();
-                net.codecForServer = networksQuery.value(3).toString().toAscii();
-                net.codecForEncoding = networksQuery.value(4).toString().toAscii();
-                net.codecForDecoding = networksQuery.value(5).toString().toAscii();
+                net.codecForServer = networksQuery.value(3).toString().toLatin1();
+                net.codecForEncoding = networksQuery.value(4).toString().toLatin1();
+                net.codecForDecoding = networksQuery.value(5).toString().toLatin1();
                 net.useRandomServer = networksQuery.value(6).toInt() == 1 ? true : false;
                 net.perform = networksQuery.value(7).toString().split("\n");
                 net.useAutoIdentify = networksQuery.value(8).toInt() == 1 ? true : false;
@@ -959,7 +968,7 @@ void SqliteStorage::setChannelPersistent(UserId user, const NetworkId &networkId
         QSqlQuery query(db);
         query.prepare(queryString("update_buffer_persistent_channel"));
         query.bindValue(":userid", user.toInt());
-        query.bindValue(":networkId", networkId.toInt());
+        query.bindValue(":networkid", networkId.toInt());
         query.bindValue(":buffercname", channel.toLower());
         query.bindValue(":joined", isJoined ? 1 : 0);
 
@@ -981,7 +990,7 @@ void SqliteStorage::setPersistentChannelKey(UserId user, const NetworkId &networ
         QSqlQuery query(db);
         query.prepare(queryString("update_buffer_set_channel_key"));
         query.bindValue(":userid", user.toInt());
-        query.bindValue(":networkId", networkId.toInt());
+        query.bindValue(":networkid", networkId.toInt());
         query.bindValue(":buffercname", channel.toLower());
         query.bindValue(":key", key);
 
@@ -1110,7 +1119,7 @@ BufferInfo SqliteStorage::bufferInfo(UserId user, const NetworkId &networkId, Bu
                 qCritical() << "  bound Values:";
                 QList<QVariant> list = query.boundValues().values();
                 for (int i = 0; i < list.size(); ++i)
-                    qCritical() << i << ":" << list.at(i).toString().toAscii().data();
+                    qCritical() << i << ":" << list.at(i).toString().toLatin1().data();
                 Q_ASSERT(false);
             }
         }
@@ -1799,6 +1808,7 @@ bool SqliteMigrationReader::readMo(QuasselUserMO &user)
     user.id = value(0).toInt();
     user.username = value(1).toString();
     user.password = value(2).toString();
+    user.hashversion = value(3).toInt();
     return true;
 }
 

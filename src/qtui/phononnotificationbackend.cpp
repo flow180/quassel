@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -19,13 +19,15 @@
  ***************************************************************************/
 
 #include <QFileDialog>
+#include <QIcon>
+#include <QUrl>
 
 #include <phonon/mediaobject.h>
+#include <phonon/backendcapabilities.h>
 
 #include "phononnotificationbackend.h"
 
 #include "clientsettings.h"
-#include "iconloader.h"
 #include "mainwin.h"
 #include "qtui.h"
 
@@ -34,11 +36,13 @@ PhononNotificationBackend::PhononNotificationBackend(QObject *parent)
     _media(0)
 {
     NotificationSettings notificationSettings;
-    _enabled = notificationSettings.value("Phonon/Enabled", true).toBool();
-    createMediaObject(notificationSettings.value("Phonon/AudioFile", QString()).toString());
-
     notificationSettings.notify("Phonon/Enabled", this, SLOT(enabledChanged(const QVariant &)));
     notificationSettings.notify("Phonon/AudioFile", this, SLOT(audioFileChanged(const QVariant &)));
+
+    createMediaObject(notificationSettings.value("Phonon/AudioFile", QString()).toString());
+
+    _enabled = notificationSettings.value("Phonon/Enabled", true).toBool();
+    _audioAvailable = !Phonon::BackendCapabilities::availableAudioOutputDevices().isEmpty();
 }
 
 
@@ -51,9 +55,13 @@ PhononNotificationBackend::~PhononNotificationBackend()
 
 void PhononNotificationBackend::notify(const Notification &notification)
 {
-    if (_enabled && _media && (notification.type == Highlight || notification.type == PrivMsg)) {
-        _media->stop();
-        _media->play();
+    if (_enabled && (notification.type == Highlight || notification.type == PrivMsg)) {
+        if (_audioAvailable && _media) {
+            _media->stop();
+            _media->play();
+        }
+        else
+            QApplication::beep();
     }
 }
 
@@ -92,8 +100,7 @@ void PhononNotificationBackend::createMediaObject(const QString &file)
         return;
     }
 
-    _media = Phonon::createPlayer(Phonon::NotificationCategory,
-        Phonon::MediaSource(file));
+    _media = Phonon::createPlayer(Phonon::NotificationCategory, Phonon::MediaSource(QUrl::fromLocalFile(file)));
 }
 
 
@@ -104,9 +111,10 @@ PhononNotificationBackend::ConfigWidget::ConfigWidget(QWidget *parent)
     audioPreview(0)
 {
     ui.setupUi(this);
-    ui.enabled->setIcon(SmallIcon("media-playback-start"));
-    ui.play->setIcon(SmallIcon("media-playback-start"));
-    ui.open->setIcon(SmallIcon("document-open"));
+    _audioAvailable = !Phonon::BackendCapabilities::availableAudioOutputDevices().isEmpty();
+    ui.enabled->setIcon(QIcon::fromTheme("media-playback-start"));
+    ui.play->setIcon(QIcon::fromTheme("media-playback-start"));
+    ui.open->setIcon(QIcon::fromTheme("document-open"));
 
     connect(ui.enabled, SIGNAL(toggled(bool)), SLOT(widgetChanged()));
     connect(ui.filename, SIGNAL(textChanged(const QString &)), SLOT(widgetChanged()));
@@ -122,12 +130,20 @@ PhononNotificationBackend::ConfigWidget::~ConfigWidget()
 
 void PhononNotificationBackend::ConfigWidget::widgetChanged()
 {
-    ui.play->setEnabled(ui.enabled->isChecked() && !ui.filename->text().isEmpty());
+    if (! _audioAvailable) {
+        ui.play->setEnabled(ui.enabled->isChecked());
+        ui.open->setEnabled(false);
+        ui.filename->setEnabled(false);
+        ui.filename->setText(QString());
+    }
+    else {
+        ui.play->setEnabled(ui.enabled->isChecked() && !ui.filename->text().isEmpty());
 
-    bool changed = (enabled != ui.enabled->isChecked()
-                    || filename != ui.filename->text());
+        bool changed = (enabled != ui.enabled->isChecked() || filename != ui.filename->text());
 
-    if (changed != hasChanged()) setChangedState(changed);
+        if (changed != hasChanged())
+            setChangedState(changed);
+    }
 }
 
 
@@ -180,12 +196,15 @@ void PhononNotificationBackend::ConfigWidget::on_open_clicked()
 
 void PhononNotificationBackend::ConfigWidget::on_play_clicked()
 {
-    if (!ui.filename->text().isEmpty()) {
-        if (audioPreview)
-            delete audioPreview;
+    if (_audioAvailable) {
+        if (!ui.filename->text().isEmpty()) {
+            if (audioPreview)
+                delete audioPreview;
 
-        audioPreview = Phonon::createPlayer(Phonon::NotificationCategory,
-            Phonon::MediaSource(ui.filename->text()));
-        audioPreview->play();
+            audioPreview = Phonon::createPlayer(Phonon::NotificationCategory, Phonon::MediaSource(QUrl::fromLocalFile(ui.filename->text())));
+            audioPreview->play();
+        }
     }
+    else
+        QApplication::beep();
 }

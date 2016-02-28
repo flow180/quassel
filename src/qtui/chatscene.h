@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -130,6 +130,8 @@ public slots:
     void setWidth(qreal width);
     void layout(int start, int end, qreal width);
 
+    void resetColumnWidths();
+
     void setMarkerLineVisible(bool visible = true);
     void setMarkerLine(MsgId msgId = MsgId());
     void jumpToMarkerLine(bool requestBacklog);
@@ -142,6 +144,8 @@ public slots:
     void clearSelection();
     void selectionToClipboard(QClipboard::Mode = QClipboard::Clipboard);
     void stringToClipboard(const QString &str, QClipboard::Mode = QClipboard::Clipboard);
+
+    void webSearchOnSelection();
 
     void requestBacklog();
 
@@ -204,6 +208,7 @@ private:
 
     ColumnHandleItem *_firstColHandle, *_secondColHandle;
     qreal _firstColHandlePos, _secondColHandlePos;
+    int _defaultFirstColHandlePos, _defaultSecondColHandlePos;
     CutoffMode _cutoffMode;
 
     ChatItem *_selectingItem;
@@ -220,6 +225,8 @@ private:
     bool _leftButtonPressed;
 
     bool _showWebPreview;
+
+    static const int _webSearchSelectionTextMaxVisible = 24;
 
 #ifdef HAVE_WEBKIT
     struct WebPreview {

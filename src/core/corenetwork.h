@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -39,6 +39,8 @@
 #endif
 
 #include "coresession.h"
+
+#include <functional>
 
 class CoreIdentity;
 class CoreUserInputHandler;
@@ -82,6 +84,9 @@ public:
 
     inline QString channelKey(const QString &channel) const { return _channelKeys.value(channel.toLower(), QString()); }
 
+    inline QByteArray readChannelCipherKey(const QString &channel) const { return _cipherKeys.value(channel.toLower()); }
+    inline void storeChannelCipherKey(const QString &channel, const QByteArray &key) { _cipherKeys[channel.toLower()] = key; }
+
     inline bool isAutoWhoInProgress(const QString &channel) const { return _autoWhoPending.value(channel.toLower(), 0); }
 
     inline UserId userId() const { return _coreSession->user(); }
@@ -92,6 +97,8 @@ public:
     inline QHostAddress peerAddress() const { return socket.peerAddress(); }
     inline quint16 localPort() const { return socket.localPort(); }
     inline quint16 peerPort() const { return socket.peerPort(); }
+
+    QList<QList<QByteArray>> splitMessage(const QString &cmd, const QString &message, std::function<QList<QByteArray>(QString &)> cmdGenerator);
 
 public slots:
     virtual void setMyNick(const QString &mynick);
@@ -112,6 +119,7 @@ public slots:
     void userInput(BufferInfo bufferInfo, QString msg);
     void putRawLine(QByteArray input);
     void putCmd(const QString &cmd, const QList<QByteArray> &params, const QByteArray &prefix = QByteArray());
+    void putCmd(const QString &cmd, const QList<QList<QByteArray>> &params, const QByteArray &prefix = QByteArray());
 
     void setChannelJoined(const QString &channel);
     void setChannelParted(const QString &channel);
@@ -120,9 +128,10 @@ public slots:
 
     // Blowfish stuff
 #ifdef HAVE_QCA2
-    Cipher *cipher(const QString &recipient) const;
+    Cipher *cipher(const QString &recipient);
     QByteArray cipherKey(const QString &recipient) const;
     void setCipherKey(const QString &recipient, const QByteArray &key);
+    bool cipherUsesCBC(const QString &target);
 #endif
 
     void setAutoWhoEnabled(bool enabled);
@@ -173,7 +182,7 @@ private slots:
     void socketHasData();
     void socketError(QAbstractSocket::SocketError);
     void socketInitialized();
-    inline void socketCloseTimeout() { socket.disconnectFromHost(); }
+    inline void socketCloseTimeout() { socket.abort(); }
     void socketDisconnected();
     void socketStateChanged(QAbstractSocket::SocketState);
     void networkInitialized();
@@ -225,6 +234,7 @@ private:
     QTimer _pingTimer;
     uint _lastPingTime;
     uint _pingCount;
+    bool _sendPings;
 
     QStringList _autoWhoQueue;
     QHash<QString, int> _autoWhoPending;
@@ -238,7 +248,7 @@ private:
 
     QString _requestedUserModes; // 2 strings separated by a '-' character. first part are requested modes to add, the second to remove
 
-    // Blowfish key map
+    // List of blowfish keys for channels
     QHash<QString, QByteArray> _cipherKeys;
 };
 

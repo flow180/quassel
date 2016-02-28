@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -28,6 +28,7 @@
 
 #ifdef HAVE_QCA2
 #  include "cipher.h"
+#  include "keyevent.h"
 #endif
 
 IrcParser::IrcParser(CoreSession *session) :
@@ -58,7 +59,7 @@ QByteArray IrcParser::decrypt(Network *network, const QString &bufferName, const
         return message;
 
     Cipher *cipher = qobject_cast<CoreNetwork *>(network)->cipher(bufferName);
-    if (!cipher)
+    if (!cipher || cipher->key().isEmpty())
         return message;
 
     return isTopic ? cipher->decryptTopic(message) : cipher->decrypt(message);
@@ -228,7 +229,16 @@ void IrcParser::processNetworkIncoming(NetworkDataEvent *e)
                     if (!net->isChannelName(target))
                         target = nickFromMask(prefix);
                 }
-                events << new IrcEventRawMessage(EventManager::IrcEventRawNotice, net, params[1], prefix, target, e->timestamp());
+
+#ifdef HAVE_QCA2
+                // Handle DH1080 key exchange
+                if (params[1].startsWith("DH1080_INIT") && !net->isChannelName(target)) {
+                    events << new KeyEvent(EventManager::KeyEvent, net, prefix, target, KeyEvent::Init, params[1].mid(12));
+                } else if (params[1].startsWith("DH1080_FINISH") && !net->isChannelName(target)) {
+                    events << new KeyEvent(EventManager::KeyEvent, net, prefix, target, KeyEvent::Finish, params[1].mid(14));
+                } else
+#endif
+                    events << new IrcEventRawMessage(EventManager::IrcEventRawNotice, net, params[1], prefix, target, e->timestamp());
             }
         }
         break;
@@ -297,6 +307,11 @@ void IrcParser::processNetworkIncoming(NetworkDataEvent *e)
     if (defaultHandling && type != EventManager::Invalid) {
         for (int i = decParams.count(); i < params.count(); i++)
             decParams << net->serverDecode(params.at(i));
+
+        // We want to trim the last param just in case, except for PRIVMSG and NOTICE
+        // ... but those happen to be the only ones not using defaultHandling anyway
+        if (!decParams.isEmpty() && decParams.last().endsWith(' '))
+            decParams.append(decParams.takeLast().trimmed());
 
         IrcEvent *event;
         if (type == EventManager::IrcEventNumeric)

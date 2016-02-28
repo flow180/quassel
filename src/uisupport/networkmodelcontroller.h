@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -64,6 +64,7 @@ public:
         HideMode = 0x0500,
         HideDayChange = 0x0600,
         HideTopic = 0x0700,
+        HideJoinPartQuit = 0xd00,
         HideUseDefaults = 0xe00,
         HideApplyToAll = 0xf00,
 
@@ -138,7 +139,7 @@ protected:
     void setSlot(QObject *receiver, const char *method);
 
     Action *registerAction(ActionType type, const QString &text, bool checkable = false);
-    Action *registerAction(ActionType type, const QPixmap &icon, const QString &text, bool checkable = false);
+    Action *registerAction(NetworkModelController::ActionType type, const QIcon &icon, const QString &text, bool checkable = false);
     bool checkRequirements(const QModelIndex &index, ItemActiveStates requiredActiveState = QFlags<ItemActiveState>(ActiveState | InactiveState));
 
     QString nickName(const QModelIndex &index) const;

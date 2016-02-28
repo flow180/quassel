@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,8 +20,9 @@
 
 #include "coreconnectionstatuswidget.h"
 
+#include <QIcon>
+
 #include "client.h"
-#include "iconloader.h"
 #include "signalproxy.h"
 
 CoreConnectionStatusWidget::CoreConnectionStatusWidget(CoreConnection *connection, QWidget *parent)
@@ -79,11 +80,11 @@ void CoreConnectionStatusWidget::connectionStateChanged(CoreConnection::Connecti
 {
     if (state >= CoreConnection::Connected) {
         if (coreConnection()->isEncrypted()) {
-            ui.sslLabel->setPixmap(SmallIcon("security-high"));
+            ui.sslLabel->setPixmap(QIcon::fromTheme("security-high").pixmap(16));
             ui.sslLabel->setToolTip(tr("The connection to your core is encrypted with SSL."));
         }
         else {
-            ui.sslLabel->setPixmap(SmallIcon("security-low"));
+            ui.sslLabel->setPixmap(QIcon::fromTheme("security-low").pixmap(16));
             ui.sslLabel->setToolTip(tr("The connection to your core is not encrypted."));
         }
         ui.sslLabel->show();

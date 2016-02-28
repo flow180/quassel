@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -27,11 +27,16 @@ KCmdLineWrapper::KCmdLineWrapper()
 }
 
 
-void KCmdLineWrapper::addArgument(const QString &longName, const CliParserArg &arg)
+void KCmdLineWrapper::addArgument(const QString &longName_, const CliParserArg &arg)
 {
+    QString longName = longName_;
+    if (arg.type == CliParserArg::CliArgOption && !arg.valueName.isEmpty())
+        longName += " <" + arg.valueName + ">";
+
     if (arg.shortName != 0) {
-        _cmdLineOptions.add(QByteArray().append(arg.shortName));
+        _cmdLineOptions.add(QByteArray(1, arg.shortName));
     }
+
     _cmdLineOptions.add(longName.toUtf8(), ki18n(arg.help.toUtf8()), arg.def.toUtf8());
 }
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This class has been inspired by KDE's KKeySequenceWidget and uses     *
@@ -29,17 +29,17 @@
 #include <QDebug>
 #include <QKeyEvent>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QMessageBox>
 #include <QToolButton>
 
 // This defines the unicode symbols for special keys (kCommandUnicode and friends)
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
 #  include <Carbon/Carbon.h>
 #endif
 
 #include "action.h"
 #include "actioncollection.h"
-#include "iconloader.h"
 #include "keysequencewidget.h"
 
 KeySequenceButton::KeySequenceButton(KeySequenceWidget *d_, QWidget *parent)
@@ -172,7 +172,7 @@ KeySequenceWidget::KeySequenceWidget(QWidget *parent)
 
     _keyButton = new KeySequenceButton(this, this);
     _keyButton->setFocusPolicy(Qt::StrongFocus);
-    _keyButton->setIcon(SmallIcon("configure"));
+    _keyButton->setIcon(QIcon::fromTheme("configure"));
     _keyButton->setToolTip(tr("Click on the button, then enter the shortcut like you would in the program.\nExample for Ctrl+a: hold the Ctrl key and press a."));
     layout->addWidget(_keyButton);
 
@@ -180,9 +180,9 @@ KeySequenceWidget::KeySequenceWidget(QWidget *parent)
     layout->addWidget(_clearButton);
 
     if (qApp->isLeftToRight())
-        _clearButton->setIcon(SmallIcon("edit-clear-locationbar-rtl"));
+        _clearButton->setIcon(QIcon::fromTheme("edit-clear-locationbar-rtl", QIcon::fromTheme("edit-clear")));
     else
-        _clearButton->setIcon(SmallIcon("edit-clear-locationbar-ltr"));
+        _clearButton->setIcon(QIcon::fromTheme("edit-clear-locationbar-ltr", QIcon::fromTheme("edit-clear")));
 
     setLayout(layout);
 
@@ -265,7 +265,7 @@ void KeySequenceWidget::updateShortcutDisplay()
 
     if (_isRecording) {
         if (_modifierKeys) {
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
             if (_modifierKeys & Qt::META) s += QChar(kControlUnicode);
             if (_modifierKeys & Qt::ALT) s += QChar(kOptionUnicode);
             if (_modifierKeys & Qt::SHIFT) s += QChar(kShiftUnicode);

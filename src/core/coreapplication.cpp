@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -85,7 +85,11 @@ CoreApplication::~CoreApplication()
 bool CoreApplication::init()
 {
     if (Quassel::init() && _internal->init()) {
+#if QT_VERSION < 0x050000
         qInstallMsgHandler(Logger::logMessage);
+#else
+        qInstallMessageHandler(Logger::logMessage);
+#endif
         return true;
     }
     return false;

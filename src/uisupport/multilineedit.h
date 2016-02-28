@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -24,16 +24,16 @@
 #include <QKeyEvent>
 #include <QHash>
 
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
 #  include <KDE/KTextEdit>
+#  define MultiLineEditParent KTextEdit
+#elif defined HAVE_KF5
+#  include <KTextWidgets/KTextEdit>
 #  define MultiLineEditParent KTextEdit
 #else
 #  include <QTextEdit>
 #  define MultiLineEditParent QTextEdit
 #endif
-
-class QKeyEvent;
-class TabCompleter;
 
 class MultiLineEdit : public MultiLineEditParent
 {
@@ -73,6 +73,8 @@ public:
     inline qint32 idx() const { return _idx; }
     inline bool emacsMode() const { return _emacsMode; }
 
+    void addCompletionSpace();
+
 public slots:
     void setMode(Mode mode);
     void setMinHeight(int numLines);
@@ -81,9 +83,7 @@ public slots:
     void setScrollBarsEnabled(bool enable = true);
     void setSpellCheckEnabled(bool enable = true);
     void setPasteProtectionEnabled(bool enable = true, QWidget *msgBoxParent = 0);
-
-    // Note: Enabling wrap will make isSingleLine() not work correctly, so only use this if minHeight() > 1!
-    void setWordWrapEnabled(bool enable = true);
+    void setLineWrapEnabled(bool enable = false);
 
     inline void setHistory(QStringList history) { _history = history; }
     inline void setTempHistory(QHash<int, QString> tempHistory) { _tempHistory = tempHistory; }
@@ -100,7 +100,7 @@ protected:
 
 private slots:
     void on_returnPressed();
-    void on_returnPressed(const QString &text);
+    void on_returnPressed(QString text);
     void on_textChanged();
     void on_documentHeightChanged(qreal height);
 
@@ -123,6 +123,7 @@ private:
     bool _scrollBarsEnabled;
     bool _pasteProtectionEnabled;
     bool _emacsMode;
+    int _completionSpace;
 
     QSize _sizeHint;
     qreal _lastDocumentHeight;

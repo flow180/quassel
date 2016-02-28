@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -18,13 +18,13 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.         *
  ***************************************************************************/
 
+#include <QIcon>
 #include <QMessageBox>
 #include <QPushButton>
 
 #include "settingsdlg.h"
 
 #include "client.h"
-#include "iconloader.h"
 
 SettingsDlg::SettingsDlg(QWidget *parent)
     : QDialog(parent),
@@ -33,7 +33,7 @@ SettingsDlg::SettingsDlg(QWidget *parent)
     ui.setupUi(this);
     setModal(true);
     setAttribute(Qt::WA_DeleteOnClose, true);
-    setWindowIcon(SmallIcon("configure"));
+    setWindowIcon(QIcon::fromTheme("configure"));
 
     updateGeometry();
 

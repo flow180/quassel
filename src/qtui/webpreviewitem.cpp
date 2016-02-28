@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -36,6 +36,7 @@ WebPreviewItem::WebPreviewItem(const QUrl &url)
     QWebView *webView = new QWebView;
     webView->settings()->setAttribute(QWebSettings::JavascriptEnabled, false);
     webView->load(url);
+    webView->setDisabled(true);
     webView->resize(1000, 750);
     QGraphicsProxyWidget *proxyItem = new QGraphicsProxyWidget(this);
     proxyItem->setWidget(webView);
@@ -43,7 +44,7 @@ WebPreviewItem::WebPreviewItem(const QUrl &url)
 
     qreal xScale = (_boundingRect.width() - 2 * frameWidth) / webView->width();
     qreal yScale = (_boundingRect.height() - 2 * frameWidth) / webView->height();
-    proxyItem->scale(xScale, yScale);
+    proxyItem->setTransform(QTransform::fromScale(xScale, yScale), true);
     proxyItem->setPos(frameWidth, frameWidth);
 
     setZValue(30);

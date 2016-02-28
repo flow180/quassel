@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -59,6 +59,7 @@ public:
     void setGroupId(uint gid) { _groupId = gid; }
 
     QString bufferName() const;
+    bool acceptsRegularMessages() const;
 
     inline bool operator==(const BufferInfo &other) const { return _bufferId == other._bufferId; }
 

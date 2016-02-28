@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,11 +20,11 @@
 
 #include "identitiessettingspage.h"
 
+#include <QIcon>
 #include <QInputDialog>
 #include <QMessageBox>
 
 #include "client.h"
-#include "iconloader.h"
 #include "signalproxy.h"
 
 IdentitiesSettingsPage::IdentitiesSettingsPage(QWidget *parent)
@@ -32,9 +32,9 @@ IdentitiesSettingsPage::IdentitiesSettingsPage(QWidget *parent)
     _editSsl(false)
 {
     ui.setupUi(this);
-    ui.renameIdentity->setIcon(BarIcon("edit-rename"));
-    ui.addIdentity->setIcon(BarIcon("list-add-user"));
-    ui.deleteIdentity->setIcon(BarIcon("list-remove-user"));
+    ui.renameIdentity->setIcon(QIcon::fromTheme("edit-rename"));
+    ui.addIdentity->setIcon(QIcon::fromTheme("list-add-user"));
+    ui.deleteIdentity->setIcon(QIcon::fromTheme("list-remove-user"));
 
     coreConnectionStateChanged(Client::isConnected()); // need a core connection!
     connect(Client::instance(), SIGNAL(coreConnectionStateChanged(bool)), this, SLOT(coreConnectionStateChanged(bool)));
@@ -84,7 +84,7 @@ void IdentitiesSettingsPage::continueUnsecured()
     _editSsl = true;
 
     QHash<IdentityId, CertIdentity *>::iterator idIter;
-    for (idIter = identities.begin(); idIter != identities.end(); idIter++) {
+    for (idIter = identities.begin(); idIter != identities.end(); ++idIter) {
         idIter.value()->enableEditSsl();
     }
 
@@ -175,6 +175,12 @@ bool IdentitiesSettingsPage::testHasChanged()
         if (currentId != 0) {
             changedIdentities.removeAll(currentId);
             CertIdentity temp(currentId, this);
+#ifdef HAVE_SSL
+            // we need to set the cert and key manually, as they aren't synced
+            CertIdentity *old = identities[currentId];
+            temp.setSslKey(old->sslKey());
+            temp.setSslCert(old->sslCert());
+#endif
             ui.identityEditor->saveToIdentity(&temp);
             temp.setIdentityName(identities[currentId]->identityName());
             if (temp != *Client::identity(currentId) || temp.isDirty())
@@ -411,7 +417,7 @@ SaveIdentitiesDlg::SaveIdentitiesDlg(const QList<CertIdentity *> &toCreate, cons
     : QDialog(parent)
 {
     ui.setupUi(this);
-    ui.abort->setIcon(SmallIcon("dialog-cancel"));
+    ui.abort->setIcon(QIcon::fromTheme("dialog-cancel"));
 
     numevents = toCreate.count() + toUpdate.count() + toRemove.count();
     rcvevents = 0;

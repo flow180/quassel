@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -158,21 +158,6 @@ void BufferView::setFilteredModel(QAbstractItemModel *model_, BufferViewConfig *
 }
 
 
-void BufferView::setSelectionModel(QItemSelectionModel *selectionModel)
-{
-    if (QTreeView::selectionModel())
-        disconnect(selectionModel, SIGNAL(currentChanged(QModelIndex, QModelIndex)),
-            model(), SIGNAL(checkPreviousCurrentForRemoval(QModelIndex, QModelIndex)));
-
-    QTreeView::setSelectionModel(selectionModel);
-    BufferViewFilter *filter = qobject_cast<BufferViewFilter *>(model());
-    if (filter) {
-        connect(selectionModel, SIGNAL(currentChanged(QModelIndex, QModelIndex)),
-            filter, SLOT(checkPreviousCurrentForRemoval(QModelIndex, QModelIndex)));
-    }
-}
-
-
 void BufferView::setConfig(BufferViewConfig *config)
 {
     if (_config == config)
@@ -253,16 +238,12 @@ void BufferView::dropEvent(QDropEvent *event)
     if (bufferList.count() != 1)
         return QTreeView::dropEvent(event);
 
-    NetworkId networkId = bufferList[0].first;
     BufferId bufferId2 = bufferList[0].second;
 
     if (index.data(NetworkModel::ItemTypeRole) != NetworkModel::BufferItemType)
         return QTreeView::dropEvent(event);
 
     if (index.data(NetworkModel::BufferTypeRole) != BufferInfo::QueryBuffer)
-        return QTreeView::dropEvent(event);
-
-    if (index.data(NetworkModel::NetworkIdRole).value<NetworkId>() != networkId)
         return QTreeView::dropEvent(event);
 
     BufferId bufferId1 = index.data(NetworkModel::BufferIdRole).value<BufferId>();
@@ -392,10 +373,15 @@ void BufferView::setExpandedState(const QModelIndex &networkIdx)
     storeExpandedState(networkIdx); // this call is needed to keep track of the isActive state
 }
 
-
+#if QT_VERSION < 0x050000
 void BufferView::dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight)
 {
     QTreeView::dataChanged(topLeft, bottomRight);
+#else
+void BufferView::dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles)
+{
+    QTreeView::dataChanged(topLeft, bottomRight, roles);
+#endif
 
     // determine how many items have been changed and if any of them is a networkitem
     // which just swichted from active to inactive or vice versa

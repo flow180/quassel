@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -49,10 +49,8 @@ public:
         QString commitHash;
         uint commitDate;
         QString buildDate;
-        bool isSourceDirty;
-        uint protocolVersion;
-        uint clientNeedsProtocol;
-        uint coreNeedsProtocol;
+
+        uint protocolVersion; // deprecated
 
         QString applicationName;
         QString coreApplicationName;
@@ -71,8 +69,11 @@ public:
     enum Feature {
         SynchronizedMarkerLine = 0x0001,
         SaslAuthentication = 0x0002,
+        SaslExternal = 0x0004,
+        HideInactiveNetworks = 0x0008,
+        PasswordChange = 0x0010,
 
-        NumFeatures = 0x0002
+        NumFeatures = 0x0010
     };
     Q_DECLARE_FLAGS(Features, Feature);
 
@@ -83,7 +84,7 @@ public:
 
     virtual ~Quassel();
 
-    static void setupBuildInfo(const QString &generated);
+    static void setupBuildInfo();
     static inline const BuildInfo &buildInfo();
     static inline RunMode runMode();
 
@@ -148,6 +149,7 @@ protected:
     inline void disableCrashhandler();
 
 private:
+    void setupEnvironment();
     void registerMetaTypes();
 
     static void handleSignal(int signal);

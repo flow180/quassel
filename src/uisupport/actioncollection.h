@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,8 +20,7 @@
  * This is a subset of the API of KDE's KActionCollection.                 *
  ***************************************************************************/
 
-#ifndef ACTIONCOLLECTION_H_
-#define ACTIONCOLLECTION_H_
+#pragma once
 
 #ifndef HAVE_KDE
 
@@ -96,7 +95,11 @@ signals:
     void actionTriggered(QAction *action);
 
 protected slots:
+#if QT_VERSION >= 0x050000
+    virtual void connectNotify(const QMetaMethod &signal);
+#else
     virtual void connectNotify(const char *signal);
+#endif
     virtual void slotActionTriggered();
 
 private slots:
@@ -120,8 +123,11 @@ int ActionCollection::count() const { return actions().count(); }
 bool ActionCollection::isEmpty() const { return actions().count(); }
 
 #else /* HAVE_KDE */
-
-#include <KActionCollection>
+#  ifdef HAVE_KDE4
+#    include <KActionCollection>
+#  else
+#    include <KXmlGui/KActionCollection>
+#  endif
 
 class ActionCollection : public KActionCollection
 {
@@ -131,7 +137,4 @@ public:
     explicit ActionCollection(QObject *parent) : KActionCollection(parent) {};
 };
 
-
-#endif
-
-#endif
+#endif /* HAVE_KDE */

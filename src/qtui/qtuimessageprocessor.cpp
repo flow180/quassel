@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -25,8 +25,6 @@
 #include "identity.h"
 #include "messagemodel.h"
 #include "network.h"
-
-const int progressUpdateDelay = 100;  // ms between progress signal updates
 
 QtUiMessageProcessor::QtUiMessageProcessor(QObject *parent)
     : AbstractMessageProcessor(parent),
@@ -72,7 +70,7 @@ void QtUiMessageProcessor::process(QList<Message> &msgs)
     while (msgIter != msgIterEnd) {
         checkForHighlight(*msgIter);
         preProcess(*msgIter);
-        msgIter++;
+        ++msgIter;
     }
     Client::messageModel()->insertMessages(msgs);
     return;
@@ -192,7 +190,7 @@ void QtUiMessageProcessor::highlightListChanged(const QVariant &variant)
             rule["CS"].toBool() ? Qt::CaseSensitive : Qt::CaseInsensitive,
             rule["RegEx"].toBool(),
             rule["Channel"].toString());
-        iter++;
+        ++iter;
     }
 }
 

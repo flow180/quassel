@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -70,7 +70,7 @@ void BufferViewOverlay::restore()
     currentIds += CoreAccountSettings().bufferViewOverlay();
 
     QSet<int>::const_iterator iter;
-    for (iter = currentIds.constBegin(); iter != currentIds.constEnd(); iter++) {
+    for (iter = currentIds.constBegin(); iter != currentIds.constEnd(); ++iter) {
         addView(*iter);
     }
 }
@@ -144,7 +144,7 @@ void BufferViewOverlay::removeView(int viewId)
         else {
             if (!config->isInitialized())
                 _uninitializedViewCount++;
-            viewIter++;
+            ++viewIter;
         }
     }
 
@@ -211,7 +211,7 @@ void BufferViewOverlay::updateHelper()
     if (Client::bufferViewManager()) {
         BufferViewConfig *config = 0;
         QSet<int>::const_iterator viewIter;
-        for (viewIter = _bufferViewIds.constBegin(); viewIter != _bufferViewIds.constEnd(); viewIter++) {
+        for (viewIter = _bufferViewIds.constBegin(); viewIter != _bufferViewIds.constEnd(); ++viewIter) {
             config = Client::bufferViewManager()->bufferViewConfig(*viewIter);
             if (!config)
                 continue;

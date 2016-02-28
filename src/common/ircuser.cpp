@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -42,6 +42,7 @@ IrcUser::IrcUser(const QString &hostmask, Network *network) : SyncableObject(net
     _ircOperator(),
     _lastAwayMessage(0),
     _whoisServiceReply(),
+    _encrypted(false),
     _network(network),
     _codecForEncoding(0),
     _codecForDecoding(0)
@@ -86,7 +87,7 @@ QStringList IrcUser::channels() const
 
 void IrcUser::setCodecForEncoding(const QString &name)
 {
-    setCodecForEncoding(QTextCodec::codecForName(name.toAscii()));
+    setCodecForEncoding(QTextCodec::codecForName(name.toLatin1()));
 }
 
 
@@ -98,7 +99,7 @@ void IrcUser::setCodecForEncoding(QTextCodec *codec)
 
 void IrcUser::setCodecForDecoding(const QString &name)
 {
-    setCodecForDecoding(QTextCodec::codecForName(name.toAscii()));
+    setCodecForDecoding(QTextCodec::codecForName(name.toLatin1()));
 }
 
 
@@ -248,6 +249,14 @@ void IrcUser::setSuserHost(const QString &suserHost)
 }
 
 
+void IrcUser::setEncrypted(bool encrypted)
+{
+    _encrypted = encrypted;
+    emit encryptedSet(encrypted);
+    SYNC(ARG(encrypted))
+}
+
+
 void IrcUser::updateObjectName()
 {
     renameObject(QString::number(network()->networkId().toInt()) + "/" + _nick);
@@ -266,12 +275,13 @@ void IrcUser::updateHostmask(const QString &mask)
 }
 
 
-void IrcUser::joinChannel(IrcChannel *channel)
+void IrcUser::joinChannel(IrcChannel *channel, bool skip_channel_join)
 {
     Q_ASSERT(channel);
     if (!_channels.contains(channel)) {
         _channels.insert(channel);
-        channel->joinIrcUser(this);
+        if (!skip_channel_join)
+            channel->joinIrcUser(this);
     }
 }
 

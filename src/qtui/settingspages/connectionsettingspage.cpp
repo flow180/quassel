@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -85,6 +85,8 @@ QVariant ConnectionSettingsPage::loadAutoWidgetValue(const QString &widgetName)
         return config->autoWhoNickLimit();
     if (widgetName == "autoWhoDelay")
         return config->autoWhoDelay();
+    if (widgetName == "standardCtcp")
+        return config->standardCtcp();
 
     return SettingsPage::loadAutoWidgetValue(widgetName);
 }
@@ -109,6 +111,8 @@ void ConnectionSettingsPage::saveAutoWidgetValue(const QString &widgetName, cons
         config->requestSetAutoWhoNickLimit(value.toInt());
     else if (widgetName == "autoWhoDelay")
         config->requestSetAutoWhoDelay(value.toInt());
+    else if (widgetName == "standardCtcp")
+        config->requestSetStandardCtcp(value.toBool());
 
     else
         SettingsPage::saveAutoWidgetValue(widgetName, value);

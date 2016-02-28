@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -19,9 +19,9 @@
  ***************************************************************************/
 
 #include <QApplication>
+#include <QIcon>
 
 #include "buffersettings.h"
-#include "iconloader.h"
 #include "qssparser.h"
 #include "quassel.h"
 #include "uistyle.h"
@@ -33,13 +33,13 @@ QString UiStyle::_timestampFormatString;
 
 UiStyle::UiStyle(QObject *parent)
     : QObject(parent),
-    _channelJoinedIcon(SmallIcon("irc-channel-active")),
-    _channelPartedIcon(SmallIcon("irc-channel-inactive")),
-    _userOfflineIcon(SmallIcon("im-user-offline")),
-    _userOnlineIcon(SmallIcon("im-user")),
-    _userAwayIcon(SmallIcon("im-user-away")),
-    _categoryOpIcon(SmallIcon("irc-operator")),
-    _categoryVoiceIcon(SmallIcon("irc-voice")),
+    _channelJoinedIcon(QIcon::fromTheme("irc-channel-joined", QIcon(":/icons/irc-channel-joined.png"))),
+    _channelPartedIcon(QIcon::fromTheme("irc-channel-parted", QIcon(":/icons/irc-channel-parted.png"))),
+    _userOfflineIcon(QIcon::fromTheme("im-user-offline", QIcon::fromTheme("user-offline", QIcon(":/icons/im-user-offline.png")))),
+    _userOnlineIcon(QIcon::fromTheme("im-user", QIcon::fromTheme("user-available", QIcon(":/icons/im-user.png")))), // im-user-* are non-standard oxygen extensions
+    _userAwayIcon(QIcon::fromTheme("im-user-away", QIcon::fromTheme("user-away", QIcon(":/icons/im-user-away.png")))),
+    _categoryOpIcon(QIcon::fromTheme("irc-operator")),
+    _categoryVoiceIcon(QIcon::fromTheme("irc-voice")),
     _opIconLimit(UserCategoryItem::categoryFromModes("o")),
     _voiceIconLimit(UserCategoryItem::categoryFromModes("v"))
 {
@@ -104,8 +104,22 @@ void UiStyle::loadStyleSheet()
     QString styleSheet;
     styleSheet += loadStyleSheet("file:///" + Quassel::findDataFilePath("stylesheets/default.qss"));
     styleSheet += loadStyleSheet("file:///" + Quassel::configDirPath() + "settings.qss");
-    if (s.value("UseCustomStyleSheet", false).toBool())
-        styleSheet += loadStyleSheet("file:///" + s.value("CustomStyleSheetPath").toString(), true);
+    if (s.value("UseCustomStyleSheet", false).toBool()) {
+        QString customSheetPath(s.value("CustomStyleSheetPath").toString());
+        QString customSheet = loadStyleSheet("file:///" + customSheetPath, true);
+        if (customSheet.isEmpty()) {
+            // MIGRATION: changed default install path for data from /usr/share/apps to /usr/share
+            if (customSheetPath.startsWith("/usr/share/apps/quassel")) {
+                customSheetPath.replace(QRegExp("^/usr/share/apps"), "/usr/share");
+                customSheet = loadStyleSheet("file:///" + customSheetPath, true);
+                if (!customSheet.isEmpty()) {
+                    s.setValue("CustomStyleSheetPath", customSheetPath);
+                    qDebug() << "Custom stylesheet path migrated to" << customSheetPath;
+                }
+            }
+        }
+        styleSheet += customSheet;
+    }
     styleSheet += loadStyleSheet("file:///" + Quassel::optionValue("qss"), true);
 
     if (!styleSheet.isEmpty()) {
@@ -491,12 +505,16 @@ QList<QTextLayout::FormatRange> UiStyle::toTextLayoutList(const FormatList &form
 UiStyle::StyledString UiStyle::styleString(const QString &s_, quint32 baseFormat)
 {
     QString s = s_;
-    if (s.length() > 65535) {
-        qWarning() << QString("String too long to be styled: %1").arg(s);
-        return StyledString();
-    }
     StyledString result;
     result.formatList.append(qMakePair((quint16)0, baseFormat));
+
+    if (s.length() > 65535) {
+        // We use quint16 for indexes
+        qWarning() << QString("String too long to be styled: %1").arg(s);
+        result.plainText = s;
+        return result;
+    }
+
     quint32 curfmt = baseFormat;
     int pos = 0; quint16 length = 0;
     for (;;) {
@@ -561,15 +579,42 @@ UiStyle::StyledString UiStyle::styleString(const QString &s_, quint32 baseFormat
 
 QString UiStyle::mircToInternal(const QString &mirc_)
 {
-    QString mirc = mirc_;
-    mirc.replace('%', "%%");    // escape % just to be sure
-    mirc.replace('\t', "        ");    // tabs break layout, also this is italics in Konversation
-    mirc.replace('\x02', "%B");
-    mirc.replace('\x0f', "%O");
-    mirc.replace('\x12', "%R");
-    mirc.replace('\x16', "%R");
-    mirc.replace('\x1d', "%S");
-    mirc.replace('\x1f', "%U");
+    QString mirc;
+    mirc.reserve(mirc_.size());
+    foreach (const QChar &c, mirc_) {
+        if ((c < '\x20' || c == '\x7f') && c != '\x03') {
+            switch (c.unicode()) {
+                case '\x02':
+                    mirc += "%B";
+                    break;
+                case '\x0f':
+                    mirc += "%O";
+                    break;
+                case '\x09':
+                    mirc += "        ";
+                    break;
+                case '\x12':
+                case '\x16':
+                    mirc += "%R";
+                    break;
+                case '\x1d':
+                    mirc += "%S";
+                    break;
+                case '\x1f':
+                    mirc += "%U";
+                    break;
+                case '\x7f':
+                    mirc += QChar(0x2421);
+                    break;
+                default:
+                    mirc += QChar(0x2400 + c.unicode());
+            }
+        } else {
+            if (c == '%')
+                mirc += c;
+            mirc += c;
+        }
+    }
 
     // Now we bring the color codes (\x03) in a sane format that can be parsed more easily later.
     // %Dcfxx is foreground, %Dcbxx is background color, where xx is a 2 digit dec number denoting the color code.
@@ -634,14 +679,11 @@ void UiStyle::StyledMessage::style() const
     QString t;
     switch (type()) {
     case Message::Plain:
-        //: Plain Message
-        t = tr("%1").arg(txt); break;
+        t = QString("%1").arg(txt); break;
     case Message::Notice:
-        //: Notice Message
-        t = tr("%1").arg(txt); break;
+        t = QString("%1").arg(txt); break;
     case Message::Action:
-        //: Action Message
-        t = tr("%DN%1%DN %2").arg(nick).arg(txt);
+        t = QString("%DN%1%DN %2").arg(nick).arg(txt);
         break;
     case Message::Nick:
         //: Nick Message
@@ -678,23 +720,19 @@ void UiStyle::StyledMessage::style() const
     //case Message::Kill: FIXME
 
     case Message::Server:
-        //: Server Message
-        t = tr("%1").arg(txt); break;
+        t = QString("%1").arg(txt); break;
     case Message::Info:
-        //: Info Message
-        t = tr("%1").arg(txt); break;
+        t = QString("%1").arg(txt); break;
     case Message::Error:
-        //: Error Message
-        t = tr("%1").arg(txt); break;
+        t = QString("%1").arg(txt); break;
     case Message::DayChange:
     {
         //: Day Change Message
-        t = tr("{Day changed to %1}").arg(QLocale().toString(timestamp(), QLocale().dateFormat()));
+        t = tr("{Day changed to %1}").arg(timestamp().date().toString(Qt::DefaultLocaleLongDate));
     }
         break;
     case Message::Topic:
-        //: Topic Message
-        t = tr("%1").arg(txt); break;
+        t = QString("%1").arg(txt); break;
     case Message::NetsplitJoin:
     {
         QStringList users = txt.split("#:#");
@@ -727,10 +765,9 @@ void UiStyle::StyledMessage::style() const
     }
     break;
     case Message::Invite:
-        //: Invite Message
-        t = tr("%1").arg(txt); break;
+        t = QString("%1").arg(txt); break;
     default:
-        t = tr("[%1]").arg(txt);
+        t = QString("[%1]").arg(txt);
     }
     _contents = UiStyle::styleString(t, UiStyle::formatType(type()));
 }
@@ -776,9 +813,9 @@ QString UiStyle::StyledMessage::decoratedSender() const
 {
     switch (type()) {
     case Message::Plain:
-        return tr("<%1>").arg(plainSender()); break;
+        return QString("<%1>").arg(plainSender()); break;
     case Message::Notice:
-        return tr("[%1]").arg(plainSender()); break;
+        return QString("[%1]").arg(plainSender()); break;
     case Message::Action:
         return "-*-"; break;
     case Message::Nick:
@@ -831,7 +868,7 @@ quint8 UiStyle::StyledMessage::senderHash() const
         if (chopCount < nick.size())
             nick.chop(chopCount);
     }
-    quint16 hash = qChecksum(nick.toAscii().data(), nick.toAscii().size());
+    quint16 hash = qChecksum(nick.toLatin1().data(), nick.toLatin1().size());
     return (_senderHash = (hash & 0xf) + 1);
 }
 

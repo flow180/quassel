@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,6 +21,7 @@
 #include "ignorelistsettingspage.h"
 
 #include <QHeaderView>
+#include <QIcon>
 #include <QItemSelectionModel>
 #include <QModelIndex>
 #include <QPainter>
@@ -28,16 +29,15 @@
 #include <QString>
 #include <QEvent>
 #include <QDebug>
-#include "iconloader.h"
 
 IgnoreListSettingsPage::IgnoreListSettingsPage(QWidget *parent)
     : SettingsPage(tr("IRC"), tr("Ignore List"), parent)
 {
     ui.setupUi(this);
     _delegate = new IgnoreListDelegate(ui.ignoreListView);
-    ui.newIgnoreRuleButton->setIcon(SmallIcon("list-add"));
-    ui.deleteIgnoreRuleButton->setIcon(SmallIcon("edit-delete"));
-    ui.editIgnoreRuleButton->setIcon(SmallIcon("configure"));
+    ui.newIgnoreRuleButton->setIcon(QIcon::fromTheme("list-add"));
+    ui.deleteIgnoreRuleButton->setIcon(QIcon::fromTheme("edit-delete"));
+    ui.editIgnoreRuleButton->setIcon(QIcon::fromTheme("configure"));
 
     ui.ignoreListView->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui.ignoreListView->setSelectionMode(QAbstractItemView::SingleSelection);

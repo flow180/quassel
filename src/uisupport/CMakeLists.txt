@@ -1,15 +1,9 @@
 # Builds the uisupport module
 
-if(WITH_QT5)
-  setup_qt_variables(Widgets Network)
-else(WITH_QT5)
-  setup_qt_variables(Gui Network)
-endif(WITH_QT5)
-
 set(SOURCES
+    aboutdata.cpp
     abstractbuffercontainer.cpp
     abstractitemview.cpp
-    abstractnotificationbackend.cpp
     action.cpp
     actioncollection.cpp
     bufferhotlistfilter.cpp
@@ -24,8 +18,6 @@ set(SOURCES
     flatproxymodel.cpp
     fontselector.cpp
     graphicalui.cpp
-    icon.cpp
-    iconloader.cpp
     multilineedit.cpp
     networkmodelcontroller.cpp
     nickview.cpp
@@ -38,62 +30,34 @@ set(SOURCES
     toolbaractionprovider.cpp
     uisettings.cpp
     uistyle.cpp
-   )
 
-set(MOC_HDRS
-    abstractbuffercontainer.h
-    abstractitemview.h
+    # needed for automoc
     abstractnotificationbackend.h
-    action.h
-    actioncollection.h
-    bufferhotlistfilter.h
-    bufferview.h
-    bufferviewfilter.h
-    bufferviewoverlayfilter.h
-    clearablelineedit.h
-    clickablelabel.h
-    colorbutton.h
-    contextmenuactionprovider.h
-    flatproxymodel.h
-    fontselector.h
-    graphicalui.h
-    iconloader.h
-    multilineedit.h
-    networkmodelcontroller.h
-    nickview.h
-    nickviewfilter.h
-    resizingstackedwidget.h
-    settingspage.h
-    styledlabel.h
-    tabcompleter.h
-    toolbaractionprovider.h
-    uistyle.h
-   )
+)
 
-set(HEADERS
-    clickable.h
-    icon.h
-    qssparser.h
-    uisettings.h
-   )
-
-if(HAVE_KDE)
+if (WITH_KDE4)
+    include_directories(${KDE4_INCLUDES})
+    add_definitions(-DHAVE_KDE ${KDE4_DEFINITIONS})
     set(SOURCES ${SOURCES} kcmdlinewrapper.cpp)
-    set(HEADERS ${HEADERS} kcmdlinewrapper.h)
-endif(HAVE_KDE)
+endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/src/common
                     ${CMAKE_SOURCE_DIR}/src/client
-                    ${QUASSEL_QT_INCLUDES})
+)
 
-if(HAVE_QCA2)
-  include_directories(${QCA2_INCLUDE_DIR})
-endif(HAVE_QCA2)
+if (USE_QT5)
+    list(APPEND qt_modules Widgets)
+endif()
 
-if(NOT WITH_QT5)
-  qt4_wrap_cpp(MOC ${MOC_HDRS})
-endif(NOT WITH_QT5)
+add_library(mod_uisupport STATIC ${SOURCES})
+qt_use_modules(mod_uisupport Core Gui Network ${qt_modules})
 
-add_library(mod_uisupport STATIC ${SOURCES} ${MOC} ${HEADERS})
-add_dependencies(mod_uisupport mod_common mod_client)
-set_target_properties(mod_uisupport PROPERTIES COMPILE_FLAGS "${QUASSEL_QT_COMPILEFLAGS}")
+target_link_libraries(mod_uisupport mod_client mod_common)
+
+if (WITH_KDE4)
+    target_link_libraries(mod_uisupport ${KDE4_KDECORE_LIBS} ${KDE4_KDEUI_LIBRARY})
+endif()
+
+if (WITH_KF5)
+    target_link_libraries(mod_uisupport KF5::CoreAddons KF5::TextWidgets KF5::XmlGui)
+endif()

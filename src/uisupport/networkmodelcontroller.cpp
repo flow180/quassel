@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,6 +21,7 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QGridLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QInputDialog>
@@ -31,7 +32,6 @@
 
 #include "buffermodel.h"
 #include "buffersettings.h"
-#include "iconloader.h"
 #include "clientidentity.h"
 #include "network.h"
 #include "util.h"
@@ -59,7 +59,7 @@ Action *NetworkModelController::registerAction(ActionType type, const QString &t
 }
 
 
-Action *NetworkModelController::registerAction(ActionType type, const QPixmap &icon, const QString &text, bool checkable)
+Action *NetworkModelController::registerAction(ActionType type, const QIcon &icon, const QString &text, bool checkable)
 {
     Action *act;
     if (icon.isNull())
@@ -307,6 +307,19 @@ void NetworkModelController::handleHideAction(ActionType type, QAction *action)
 {
     Q_UNUSED(action)
 
+    if (type == HideJoinPartQuit) {
+        bool anyChecked = NetworkModelController::action(HideJoin)->isChecked();
+        anyChecked |= NetworkModelController::action(HidePart)->isChecked();
+        anyChecked |= NetworkModelController::action(HideQuit)->isChecked();
+
+        // If any are checked, uncheck them all.
+        // If none are checked, check them all.
+        bool newCheckedState = !anyChecked;
+        NetworkModelController::action(HideJoin)->setChecked(newCheckedState);
+        NetworkModelController::action(HidePart)->setChecked(newCheckedState);
+        NetworkModelController::action(HideQuit)->setChecked(newCheckedState);
+    }
+
     int filter = 0;
     if (NetworkModelController::action(HideJoin)->isChecked())
         filter |= Message::Join | Message::NetsplitJoin;
@@ -324,6 +337,7 @@ void NetworkModelController::handleHideAction(ActionType type, QAction *action)
         filter |= Message::Topic;
 
     switch (type) {
+    case HideJoinPartQuit:
     case HideJoin:
     case HidePart:
     case HideQuit:
@@ -526,7 +540,7 @@ void NetworkModelController::handleNickAction(ActionType type, QAction *action)
 
 NetworkModelController::JoinDlg::JoinDlg(const QModelIndex &index, QWidget *parent) : QDialog(parent)
 {
-    setWindowIcon(SmallIcon("irc-join-channel"));
+    setWindowIcon(QIcon::fromTheme("irc-join-channel"));
     setWindowTitle(tr("Join Channel"));
 
     QGridLayout *layout = new QGridLayout(this);

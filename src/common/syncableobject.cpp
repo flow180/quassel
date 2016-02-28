@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -114,13 +114,17 @@ QVariantMap SyncableObject::toVariantMap()
 
         QVariant::Type variantType = QVariant::nameToType(method.typeName());
         if (variantType == QVariant::Invalid && !QByteArray(method.typeName()).isEmpty()) {
+#if QT_VERSION >= 0x050000
+            qWarning() << "SyncableObject::toVariantMap(): cannot fetch init data for:" << this << method.methodSignature() << "- Returntype is unknown to Qt's MetaSystem:" << QByteArray(method.typeName());
+#else
             qWarning() << "SyncableObject::toVariantMap(): cannot fetch init data for:" << this << method.signature() << "- Returntype is unknown to Qt's MetaSystem:" << QByteArray(method.typeName());
+#endif
             continue;
         }
 
         QVariant value(variantType, (const void *)0);
         QGenericReturnArgument genericvalue = QGenericReturnArgument(method.typeName(), value.data());
-        QMetaObject::invokeMethod(this, methodname.toAscii(), genericvalue);
+        QMetaObject::invokeMethod(this, methodname.toLatin1(), genericvalue);
 
         properties[SignalProxy::ExtendedMetaObject::methodBaseName(method)] = value;
     }
@@ -137,18 +141,18 @@ void SyncableObject::fromVariantMap(const QVariantMap &properties)
     while (iterator != properties.constEnd()) {
         propName = iterator.key();
         if (propName == "objectName") {
-            iterator++;
+            ++iterator;
             continue;
         }
 
-        int propertyIndex = meta->indexOfProperty(propName.toAscii());
+        int propertyIndex = meta->indexOfProperty(propName.toLatin1());
 
         if (propertyIndex == -1 || !meta->property(propertyIndex).isWritable())
             setInitValue(propName, iterator.value());
         else
-            setProperty(propName.toAscii(), iterator.value());
+            setProperty(propName.toLatin1(), iterator.value());
         // qDebug() << "<<< SYNC:" << name << iterator.value();
-        iterator++;
+        ++iterator;
     }
 }
 
@@ -159,9 +163,9 @@ bool SyncableObject::setInitValue(const QString &property, const QVariant &value
     handlername[7] = handlername[7].toUpper();
 
     QString methodSignature = QString("%1(%2)").arg(handlername).arg(value.typeName());
-    int methodIdx = metaObject()->indexOfMethod(methodSignature.toAscii().constData());
+    int methodIdx = metaObject()->indexOfMethod(methodSignature.toLatin1().constData());
     if (methodIdx <  0) {
-        QByteArray normedMethodName = QMetaObject::normalizedSignature(methodSignature.toAscii().constData());
+        QByteArray normedMethodName = QMetaObject::normalizedSignature(methodSignature.toLatin1().constData());
         methodIdx = metaObject()->indexOfMethod(normedMethodName.constData());
     }
     if (methodIdx < 0) {
@@ -169,7 +173,7 @@ bool SyncableObject::setInitValue(const QString &property, const QVariant &value
     }
 
     QGenericArgument param(value.typeName(), value.constData());
-    return QMetaObject::invokeMethod(this, handlername.toAscii(), param);
+    return QMetaObject::invokeMethod(this, handlername.toLatin1(), param);
 }
 
 

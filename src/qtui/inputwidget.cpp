@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,11 +20,12 @@
 
 #include "inputwidget.h"
 
+#include <QIcon>
+
 #include "action.h"
 #include "actioncollection.h"
 #include "bufferview.h"
 #include "client.h"
-#include "iconloader.h"
 #include "ircuser.h"
 #include "networkmodel.h"
 #include "qtui.h"
@@ -60,11 +61,12 @@ InputWidget::InputWidget(QWidget *parent)
     ui.inputEdit->setMode(MultiLineEdit::MultiLine);
     ui.inputEdit->setPasteProtectionEnabled(true);
 
-    ui.boldButton->setIcon(SmallIcon("format-text-bold"));
-    ui.italicButton->setIcon(SmallIcon("format-text-italic"));
-    ui.underlineButton->setIcon(SmallIcon("format-text-underline"));
-    ui.textcolorButton->setIcon(SmallIcon("format-text-color"));
-    ui.highlightcolorButton->setIcon(SmallIcon("format-fill-color"));
+    ui.boldButton->setIcon(QIcon::fromTheme("format-text-bold"));
+    ui.italicButton->setIcon(QIcon::fromTheme("format-text-italic"));
+    ui.underlineButton->setIcon(QIcon::fromTheme("format-text-underline"));
+    ui.textcolorButton->setIcon(QIcon::fromTheme("format-text-color"));
+    ui.highlightcolorButton->setIcon(QIcon::fromTheme("format-fill-color"));
+    ui.encryptionIconLabel->hide();
 
     _colorMenu = new QMenu();
     _colorFillMenu = new QMenu();
@@ -121,6 +123,9 @@ InputWidget::InputWidget(QWidget *parent)
 
     s.notify("EnableScrollBars", this, SLOT(setScrollBarsEnabled(QVariant)));
     setScrollBarsEnabled(s.value("EnableScrollBars", true));
+
+    s.notify("EnableLineWrap", this, SLOT(setLineWrapEnabled(QVariant)));
+    setLineWrapEnabled(s.value("EnableLineWrap", false));
 
     s.notify("EnableMultiLine", this, SLOT(setMultiLineEnabled(QVariant)));
     setMultiLineEnabled(s.value("EnableMultiLine", true));
@@ -209,6 +214,12 @@ void InputWidget::setScrollBarsEnabled(const QVariant &v)
 }
 
 
+void InputWidget::setLineWrapEnabled(const QVariant &v)
+{
+    ui.inputEdit->setLineWrapEnabled(v.toBool());
+}
+
+
 void InputWidget::setMultiLineEnabled(const QVariant &v)
 {
     ui.inputEdit->setMode(v.toBool() ? MultiLineEdit::MultiLine : MultiLineEdit::SingleLine);
@@ -289,8 +300,24 @@ void InputWidget::dataChanged(const QModelIndex &topLeft, const QModelIndex &bot
     QItemSelectionRange changedArea(topLeft, bottomRight);
     if (changedArea.contains(selectionModel()->currentIndex())) {
         updateEnabledState();
+
+        bool encrypted = false;
+
+        IrcChannel *chan = qobject_cast<IrcChannel *>(Client::bufferModel()->data(selectionModel()->currentIndex(), NetworkModel::IrcChannelRole).value<QObject *>());
+        if (chan)
+            encrypted = chan->encrypted();
+
+        IrcUser *user = qobject_cast<IrcUser *>(Client::bufferModel()->data(selectionModel()->currentIndex(), NetworkModel::IrcUserRole).value<QObject *>());
+        if (user)
+            encrypted = user->encrypted();
+
+        if (encrypted)
+            ui.encryptionIconLabel->show();
+        else
+            ui.encryptionIconLabel->hide();
     }
-};
+}
+
 
 void InputWidget::rowsAboutToBeRemoved(const QModelIndex &parent, int start, int end)
 {
@@ -444,7 +471,7 @@ void InputWidget::updateNickSelector() const
     ui.ownNick->addItems(nicks);
 
     if (me && me->isAway())
-        ui.ownNick->setItemData(nickIdx, SmallIcon("user-away"), Qt::DecorationRole);
+        ui.ownNick->setItemData(nickIdx, QIcon::fromTheme("user-away"), Qt::DecorationRole);
 
     ui.ownNick->setCurrentIndex(nickIdx);
 }
@@ -551,19 +578,19 @@ void InputWidget::colorChosen(QAction *action)
 {
     QTextCharFormat fmt;
     QColor color;
-    if (qVariantValue<QString>(action->data()) == "") {
+    if (action->data().value<QString>() == "") {
         color = Qt::transparent;
         fmt = getFormatOfWordOrSelection();
         fmt.clearForeground();
         setFormatOnSelection(fmt);
     }
     else {
-        color = QColor(inputLine()->rgbColorFromMirc(qVariantValue<QString>(action->data())));
+        color = QColor(inputLine()->rgbColorFromMirc(action->data().value<QString>()));
         fmt.setForeground(color);
         mergeFormatOnSelection(fmt);
     }
     ui.textcolorButton->setDefaultAction(action);
-    ui.textcolorButton->setIcon(createColorToolButtonIcon(SmallIcon("format-text-color"), color));
+    ui.textcolorButton->setIcon(createColorToolButtonIcon(QIcon::fromTheme("format-text-color"), color));
 }
 
 
@@ -571,19 +598,19 @@ void InputWidget::colorHighlightChosen(QAction *action)
 {
     QTextCharFormat fmt;
     QColor color;
-    if (qVariantValue<QString>(action->data()) == "") {
+    if (action->data().value<QString>() == "") {
         color = Qt::transparent;
         fmt = getFormatOfWordOrSelection();
         fmt.clearBackground();
         setFormatOnSelection(fmt);
     }
     else {
-        color = QColor(inputLine()->rgbColorFromMirc(qVariantValue<QString>(action->data())));
+        color = QColor(inputLine()->rgbColorFromMirc(action->data().value<QString>()));
         fmt.setBackground(color);
         mergeFormatOnSelection(fmt);
     }
     ui.highlightcolorButton->setDefaultAction(action);
-    ui.highlightcolorButton->setIcon(createColorToolButtonIcon(SmallIcon("format-fill-color"), color));
+    ui.highlightcolorButton->setIcon(createColorToolButtonIcon(QIcon::fromTheme("format-fill-color"), color));
 }
 
 

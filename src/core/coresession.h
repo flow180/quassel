@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -27,8 +27,9 @@
 #include "corecoreinfo.h"
 #include "corealiasmanager.h"
 #include "coreignorelistmanager.h"
+#include "peer.h"
+#include "protocol.h"
 #include "message.h"
-#include "signalproxy.h"
 #include "storage.h"
 
 class CoreBacklogManager;
@@ -39,14 +40,16 @@ class CoreIrcListHelper;
 class CoreNetwork;
 class CoreNetworkConfig;
 class CoreSessionEventProcessor;
+class CoreTransferManager;
 class CtcpParser;
 class EventManager;
 class EventStringifier;
-class InternalConnection;
+class InternalPeer;
 class IrcParser;
 class MessageEvent;
 class NetworkConnection;
-class RemoteConnection;
+class RemotePeer;
+class SignalProxy;
 
 struct NetworkInfo;
 
@@ -67,7 +70,7 @@ public:
     inline CoreNetworkConfig *networkConfig() const { return _networkConfig; }
     NetworkConnection *networkConnection(NetworkId) const;
 
-    QVariant sessionState();
+    Protocol::SessionState sessionState() const;
 
     inline SignalProxy *signalProxy() const { return _signalProxy; }
 
@@ -83,14 +86,16 @@ public:
     inline CoreIrcListHelper *ircListHelper() const { return _ircListHelper; }
 
     inline CoreIgnoreListManager *ignoreListManager() { return &_ignoreListManager; }
+    inline CoreTransferManager *transferManager() const { return _transferManager; }
+
 //   void attachNetworkConnection(NetworkConnection *conn);
 
     //! Return necessary data for restoring the session after restarting the core
     void restoreSessionState();
 
 public slots:
-    void addClient(RemoteConnection *connection);
-    void addClient(InternalConnection *connection);
+    void addClient(RemotePeer *peer);
+    void addClient(InternalPeer *peer);
 
     void msgFromClient(BufferInfo, QString message);
 
@@ -122,6 +127,8 @@ public slots:
      */
     void renameBuffer(const NetworkId &networkId, const QString &newName, const QString &oldName);
 
+    void changePassword(PeerPtr peer, const QString &userName, const QString &oldPassword, const QString &newPassword);
+
     QHash<QString, QString> persistentChannels(NetworkId) const;
 
     //! Marks us away (or unaway) on all networks
@@ -129,7 +136,7 @@ public slots:
 
 signals:
     void initialized();
-    void sessionState(const QVariant &);
+    void sessionState(const Protocol::SessionState &sessionState);
 
     //void msgFromGui(uint netid, QString buf, QString message);
     void displayMsg(Message message);
@@ -153,11 +160,13 @@ signals:
     void networkRemoved(NetworkId);
     void networkDisconnected(NetworkId);
 
+    void passwordChanged(PeerPtr peer, bool success);
+
 protected:
     virtual void customEvent(QEvent *event);
 
 private slots:
-    void removeClient(SignalProxy::AbstractPeer *peer);
+    void removeClient(Peer *peer);
 
     void recvStatusMsgFromServer(QString msg);
     void recvMessageFromServer(NetworkId networkId, Message::Type, BufferInfo::Type, const QString &target, const QString &text, const QString &sender = "", Message::Flags flags = Message::None);
@@ -197,6 +206,7 @@ private:
     CoreIrcListHelper *_ircListHelper;
     CoreNetworkConfig *_networkConfig;
     CoreCoreInfo _coreInfo;
+    CoreTransferManager *_transferManager;
 
     EventManager *_eventManager;
     EventStringifier *_eventStringifier; // should eventually move into client

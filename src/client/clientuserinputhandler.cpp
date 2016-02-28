@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -129,7 +129,7 @@ void ClientUserInputHandler::switchBuffer(const NetworkId &networkId, const QStr
         QList<ClientBufferViewConfig *> bufferViewConfigList = clientBufferViewManager->clientBufferViewConfigs();
         foreach(ClientBufferViewConfig *bufferViewConfig, bufferViewConfigList) {
             if (bufferViewConfig->temporarilyRemovedBuffers().contains(newBufId)) {
-                bufferViewConfig->addBuffer(newBufId, bufferViewConfig->bufferList().length());
+                bufferViewConfig->requestAddBuffer(newBufId, bufferViewConfig->bufferList().length());
                 //if (bufferViewConfig->sortAlphabetically()) {
                 // TODO we need to trigger a sort here, but can't reach the model required
                 // to get a bufferviewfilter, as the bufferviewmanager only managers configs

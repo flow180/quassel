@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -102,6 +102,7 @@ AliasManager::AliasList AliasManager::defaults()
             << Alias("chanserv",  "/msg chanserv $0")
             << Alias("hs", "/msg hostserv $0")
             << Alias("hostserv", "/msg hostserv $0")
+            << Alias("wii", "/whois $0 $0")
             << Alias("back", "/quote away");
 
 #ifdef Q_OS_LINUX
@@ -197,7 +198,7 @@ void AliasManager::expand(const QString &alias, const BufferInfo &bufferInfo, co
 
     while (!expandedCommands.isEmpty()) {
         QString command;
-        if (expandedCommands[0].trimmed().toLower().startsWith("/wait")) {
+        if (expandedCommands[0].trimmed().toLower().startsWith("/wait ")) {
             command = expandedCommands.join("; ");
             expandedCommands.clear();
         }

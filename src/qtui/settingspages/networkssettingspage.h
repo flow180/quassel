@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,10 +21,11 @@
 #ifndef NETWORKSSETTINGSPAGE_H
 #define NETWORKSSETTINGSPAGE_H
 
-#include <QPixmap>
+#include <QIcon>
 
 #include "network.h"
 #include "settingspage.h"
+#include "clientidentity.h"
 
 #include "ui_networkssettingspage.h"
 #include "ui_networkadddlg.h"
@@ -65,6 +66,10 @@ private slots:
     void clientIdentityRemoved(IdentityId);
     void clientIdentityUpdated();
 
+#ifdef HAVE_SSL
+    void sslUpdated();
+#endif
+
     void on_networkList_itemSelectionChanged();
     void on_addNetwork_clicked();
     void on_deleteNetwork_clicked();
@@ -86,8 +91,11 @@ private:
     NetworkId currentId;
     QHash<NetworkId, NetworkInfo> networkInfos;
     bool _ignoreWidgetChanges;
+#ifdef HAVE_SSL
+    CertIdentity *_cid;
+#endif
 
-    QPixmap connectedIcon, connectingIcon, disconnectedIcon;
+    QIcon connectedIcon, connectingIcon, disconnectedIcon;
 
     void reset();
     bool testHasChanged();

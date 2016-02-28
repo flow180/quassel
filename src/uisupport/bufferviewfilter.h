@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -69,20 +69,13 @@ public:
 
     QList<QAction *> actions(const QModelIndex &index);
 
-public slots:
-    void checkPreviousCurrentForRemoval(const QModelIndex &current, const QModelIndex &previous);
-    void checkItemForRemoval(const QModelIndex &index) { checkItemsForRemoval(index, index); }
-    void checkItemsForRemoval(const QModelIndex &topLeft, const QModelIndex &bottomRight);
-
 protected:
     bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const;
     bool lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const;
     bool bufferLessThan(const QModelIndex &source_left, const QModelIndex &source_right) const;
     bool networkLessThan(const QModelIndex &source_left, const QModelIndex &source_right) const;
-    virtual void customEvent(QEvent *event);
 
 signals:
-    void _dataChanged(const QModelIndex &source_topLeft, const QModelIndex &source_bottomRight);
     void configChanged();
 
 private slots:

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -18,16 +18,21 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.         *
  ***************************************************************************/
 
-#include <KNotification>
-#include <KNotifyConfigWidget>
+#include "knotificationbackend.h"
+
+#include <QIcon>
 #include <QTextDocument>
 #include <QVBoxLayout>
 
-#include "knotificationbackend.h"
+#ifdef HAVE_KDE4
+#  include <KNotification>
+#  include <KNotifyConfigWidget>
+#else
+#  include <KNotifications/KNotification>
+#  include <KNotifyConfig/KNotifyConfigWidget>
+#endif
 
 #include "client.h"
-#include "icon.h"
-#include "iconloader.h"
 #include "mainwin.h"
 #include "networkmodel.h"
 #include "qtui.h"
@@ -56,8 +61,12 @@ void KNotificationBackend::notify(const Notification &n)
         type = "PrivMsgFocused"; break;
     }
 
+#if QT_VERSION < 0x050000
     QString message = QString("<b>&lt;%1&gt;</b> %2").arg(n.sender, Qt::escape(n.message));
-    KNotification *notification = KNotification::event(type, message, DesktopIcon("dialog-information"), QtUi::mainWindow(),
+#else
+    QString message = QString("<b>&lt;%1&gt;</b> %2").arg(n.sender, n.message.toHtmlEscaped());
+#endif
+    KNotification *notification = KNotification::event(type, message, QIcon::fromTheme("dialog-information").pixmap(48), QtUi::mainWindow(),
         KNotification::RaiseWidgetOnActivation
         |KNotification::CloseWhenWidgetActivated
         |KNotification::CloseOnTimeout);

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,14 +20,17 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDesktopServices>
 #include <QDrag>
 #include <QGraphicsSceneMouseEvent>
+#include <QIcon>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMimeData>
 #include <QPersistentModelIndex>
+#include <QUrl>
 
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
 #  include <KMenuBar>
 #else
 #  include <QMenuBar>
@@ -46,7 +49,6 @@
 #include "clientbacklogmanager.h"
 #include "columnhandleitem.h"
 #include "contextmenuactionprovider.h"
-#include "iconloader.h"
 #include "mainwin.h"
 #include "markerlineitem.h"
 #include "messagefilter.h"
@@ -87,12 +89,12 @@ ChatScene::ChatScene(QAbstractItemModel *model, const QString &idString, qreal w
     connect(this, SIGNAL(sceneRectChanged(const QRectF &)), _markerLine, SLOT(sceneRectChanged(const QRectF &)));
 
     ChatViewSettings defaultSettings;
-    int defaultFirstColHandlePos = defaultSettings.value("FirstColumnHandlePos", 80).toInt();
-    int defaultSecondColHandlePos = defaultSettings.value("SecondColumnHandlePos", 200).toInt();
+    _defaultFirstColHandlePos = defaultSettings.value("FirstColumnHandlePos", 80).toInt();
+    _defaultSecondColHandlePos = defaultSettings.value("SecondColumnHandlePos", 200).toInt();
 
     ChatViewSettings viewSettings(this);
-    _firstColHandlePos = viewSettings.value("FirstColumnHandlePos", defaultFirstColHandlePos).toInt();
-    _secondColHandlePos = viewSettings.value("SecondColumnHandlePos", defaultSecondColHandlePos).toInt();
+    _firstColHandlePos = viewSettings.value("FirstColumnHandlePos", _defaultFirstColHandlePos).toInt();
+    _secondColHandlePos = viewSettings.value("SecondColumnHandlePos", _defaultSecondColHandlePos).toInt();
 
     _firstColHandle = new ColumnHandleItem(QtUi::style()->firstColumnSeparator());
     addItem(_firstColHandle);
@@ -157,6 +159,17 @@ ColumnHandleItem *ChatScene::secondColumnHandle() const
     return _secondColHandle;
 }
 
+void ChatScene::resetColumnWidths()
+{
+    //make sure first column is at least 80 px wide, second 120 px
+    int firstColHandlePos = qMax(_defaultFirstColHandlePos,
+                                 80);
+    int secondColHandlePos = qMax(_defaultSecondColHandlePos,
+                                  firstColHandlePos + 120);
+
+    _firstColHandle->setXPos(firstColHandlePos);
+    _secondColHandle->setXPos(secondColHandlePos);
+}
 
 ChatLine *ChatScene::chatLine(MsgId msgId, bool matchExact, bool ignoreDayChange) const
 {
@@ -638,7 +651,7 @@ void ChatScene::firstHandlePositionChanged(qreal xpos)
     QPointF senderPos(firstColumnHandle()->sceneRight(), 0);
 
     while (lineIter != lineIterBegin) {
-        lineIter--;
+        --lineIter;
         (*lineIter)->setFirstColumn(timestampWidth, senderWidth, senderPos);
     }
     //setItemIndexMethod(QGraphicsScene::BspTreeIndex);
@@ -674,7 +687,7 @@ void ChatScene::secondHandlePositionChanged(qreal xpos)
     qreal contentsWidth = _sceneRect.width() - secondColumnHandle()->sceneRight();
     QPointF contentsPos(secondColumnHandle()->sceneRight(), 0);
     while (lineIter != lineIterBegin) {
-        lineIter--;
+        --lineIter;
         (*lineIter)->setSecondColumn(senderWidth, contentsWidth, contentsPos, linePos);
     }
     //setItemIndexMethod(QGraphicsScene::BspTreeIndex);
@@ -799,11 +812,6 @@ void ChatScene::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
     chatView()->addActionsToMenu(&menu, pos);
     menu.addSeparator();
 
-    if (isPosOverSelection(pos))
-        menu.addAction(SmallIcon("edit-copy"), tr("Copy Selection"),
-            this, SLOT(selectionToClipboard()),
-            QKeySequence::Copy);
-
     // item-specific options (select link etc)
     ChatItem *item = chatItemAt(pos);
     if (item)
@@ -812,8 +820,29 @@ void ChatScene::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
         // no item -> default scene actions
         GraphicalUi::contextMenuActionProvider()->addActions(&menu, filter(), BufferId());
 
+    // If we have text selected, insert the Copy Selection as first item
+    if (isPosOverSelection(pos)) {
+        QAction *sep = menu.insertSeparator(menu.actions().first());
+        QAction *act = new Action(QIcon::fromTheme("edit-copy"), tr("Copy Selection"), &menu, this,
+            SLOT(selectionToClipboard()), QKeySequence::Copy);
+        menu.insertAction(sep, act);
+
+        QString searchSelectionText = selection();
+        if (searchSelectionText.length() > _webSearchSelectionTextMaxVisible)
+            searchSelectionText = searchSelectionText.left(_webSearchSelectionTextMaxVisible).append(QString::fromUtf8("…"));
+        searchSelectionText = tr("Search '%1'").arg(searchSelectionText);
+
+        QAction *webSearchAction = new Action(QIcon::fromTheme("edit-find"), searchSelectionText, &menu, this, SLOT(webSearchOnSelection()));
+        menu.insertAction(sep, webSearchAction);
+    }
+
     if (QtUi::mainWindow()->menuBar()->isHidden())
         menu.addAction(QtUi::actionCollection("General")->action("ToggleMenuBar"));
+
+    // show column reset action if columns have been resized in this session or there is at least one very narrow column
+    if ((_firstColHandlePos != _defaultFirstColHandlePos) || (_secondColHandlePos != _defaultSecondColHandlePos) ||
+        (_firstColHandlePos <= 10) || (_secondColHandlePos - _firstColHandlePos <= 10))
+        menu.addAction(new Action(tr("Reset Column Widths"), &menu, this, SLOT(resetColumnWidths()), 0));
 
     menu.exec(event->screenPos());
 }
@@ -1041,6 +1070,21 @@ void ChatScene::clearSelection()
     clearGlobalSelection();
     if (selectingItem())
         selectingItem()->clearSelection();
+}
+
+
+/******** *************************************************************************************/
+
+void ChatScene::webSearchOnSelection()
+{
+    if (!hasSelection())
+        return;
+
+    ChatViewSettings settings;
+    QString webSearchBaseUrl = settings.webSearchUrlFormatString();
+    QString webSearchUrl = webSearchBaseUrl.replace(QString("%s"), selection());
+    QUrl url = QUrl::fromUserInput(webSearchUrl);
+    QDesktopServices::openUrl(url);
 }
 
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,12 +21,12 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QSpinBox>
 
 #include "taskbarnotificationbackend.h"
 
 #include "clientsettings.h"
-#include "iconloader.h"
 #include "mainwin.h"
 #include "qtui.h"
 
@@ -79,16 +79,16 @@ SettingsPage *TaskbarNotificationBackend::createConfigWidget() const
 TaskbarNotificationBackend::ConfigWidget::ConfigWidget(QWidget *parent) : SettingsPage("Internal", "TaskbarNotification", parent)
 {
     QHBoxLayout *layout = new QHBoxLayout(this);
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     layout->addWidget(enabledBox = new QCheckBox(tr("Activate dock entry, timeout:"), this));
 #else
     layout->addWidget(enabledBox = new QCheckBox(tr("Mark taskbar entry, timeout:"), this));
 #endif
-    enabledBox->setIcon(SmallIcon("flag-blue"));
+    enabledBox->setIcon(QIcon::fromTheme("flag-blue"));
     enabledBox->setEnabled(true);
 
     timeoutBox = new QSpinBox(this);
-    timeoutBox->setMinimum(1);
+    timeoutBox->setMinimum(0);
     timeoutBox->setMaximum(99);
     timeoutBox->setSpecialValueText(tr("Unlimited"));
     timeoutBox->setSuffix(tr(" seconds"));

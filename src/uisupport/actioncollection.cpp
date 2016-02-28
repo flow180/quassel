@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -202,20 +202,31 @@ void ActionCollection::actionDestroyed(QObject *obj)
     unlistAction(action);
 }
 
-
+#if QT_VERSION >= 0x050000
+void ActionCollection::connectNotify(const QMetaMethod &signal)
+#else
 void ActionCollection::connectNotify(const char *signal)
+#endif
 {
     if (_connectHovered && _connectTriggered)
         return;
 
+#if QT_VERSION >= 0x050000
+    if (QMetaMethod::fromSignal(&ActionCollection::actionHovered) == signal) {
+#else
     if (QMetaObject::normalizedSignature(SIGNAL(actionHovered(QAction *))) == signal) {
+#endif
         if (!_connectHovered) {
             _connectHovered = true;
             foreach(QAction* action, actions())
             connect(action, SIGNAL(hovered()), SLOT(slotActionHovered()));
         }
     }
+#if QT_VERSION >= 0x050000
+    else if (QMetaMethod::fromSignal(&ActionCollection::actionTriggered) == signal) {
+#else
     else if (QMetaObject::normalizedSignature(SIGNAL(actionTriggered(QAction *))) == signal) {
+#endif
         if (!_connectTriggered) {
             _connectTriggered = true;
             foreach(QAction* action, actions())

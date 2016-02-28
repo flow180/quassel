@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -38,7 +38,7 @@ ChatViewSettingsPage::ChatViewSettingsPage(QWidget *parent)
     if (!(Client::coreFeatures() & Quassel::SynchronizedMarkerLine)) {
         ui.autoMarkerLine->setEnabled(false);
         ui.autoMarkerLine->setChecked(true);
-        ui.autoMarkerLine->setToolTip(tr("You need at 0.6 quasselcore to use this feature"));
+        ui.autoMarkerLine->setToolTip(tr("You need at least version 0.6 of quasselcore to use this feature"));
     }
 
     initAutoWidgets();

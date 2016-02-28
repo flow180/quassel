@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,10 +20,10 @@
 
 #include "bufferviewsettingspage.h"
 
+#include <QIcon>
 #include <QMessageBox>
 
 #include "client.h"
-#include "iconloader.h"
 #include "network.h"
 #include "bufferviewconfig.h"
 #include "bufferviewfilter.h"
@@ -39,9 +39,13 @@ BufferViewSettingsPage::BufferViewSettingsPage(QWidget *parent)
     _bufferViewHint(0)
 {
     ui.setupUi(this);
-    ui.renameBufferView->setIcon(SmallIcon("edit-rename"));
-    ui.addBufferView->setIcon(SmallIcon("list-add"));
-    ui.deleteBufferView->setIcon(SmallIcon("edit-delete"));
+    //Hide the hide inactive networks feature on older cores (which won't save the setting)
+    if (!(Client::coreFeatures() & Quassel::HideInactiveNetworks))
+        ui.hideInactiveNetworks->hide();
+
+    ui.renameBufferView->setIcon(QIcon::fromTheme("edit-rename"));
+    ui.addBufferView->setIcon(QIcon::fromTheme("list-add"));
+    ui.deleteBufferView->setIcon(QIcon::fromTheme("edit-delete"));
 
     reset();
 
@@ -60,6 +64,7 @@ BufferViewSettingsPage::BufferViewSettingsPage(QWidget *parent)
     connect(ui.addNewBuffersAutomatically, SIGNAL(clicked(bool)), this, SLOT(widgetHasChanged()));
     connect(ui.sortAlphabetically, SIGNAL(clicked(bool)), this, SLOT(widgetHasChanged()));
     connect(ui.hideInactiveBuffers, SIGNAL(clicked(bool)), this, SLOT(widgetHasChanged()));
+    connect(ui.hideInactiveNetworks, SIGNAL(clicked(bool)), this, SLOT(widgetHasChanged()));
     connect(ui.networkSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(widgetHasChanged()));
     connect(ui.minimumActivitySelector, SIGNAL(currentIndexChanged(int)), this, SLOT(widgetHasChanged()));
 
@@ -395,7 +400,7 @@ void BufferViewSettingsPage::on_deleteBufferView_clicked()
                     break;
                 }
                 else {
-                    iter++;
+                    ++iter;
                 }
             }
             delete config;
@@ -435,6 +440,7 @@ void BufferViewSettingsPage::loadConfig(BufferViewConfig *config)
     ui.addNewBuffersAutomatically->setChecked(config->addNewBuffersAutomatically());
     ui.sortAlphabetically->setChecked(config->sortAlphabetically());
     ui.hideInactiveBuffers->setChecked(config->hideInactiveBuffers());
+    ui.hideInactiveNetworks->setChecked(config->hideInactiveNetworks());
 
     int networkIndex = 0;
     for (int i = 0; i < ui.networkSelector->count(); i++) {
@@ -476,6 +482,7 @@ void BufferViewSettingsPage::saveConfig(BufferViewConfig *config)
     config->setAddNewBuffersAutomatically(ui.addNewBuffersAutomatically->isChecked());
     config->setSortAlphabetically(ui.sortAlphabetically->isChecked());
     config->setHideInactiveBuffers(ui.hideInactiveBuffers->isChecked());
+    config->setHideInactiveNetworks(ui.hideInactiveNetworks->isChecked());
     config->setNetworkId(ui.networkSelector->itemData(ui.networkSelector->currentIndex()).value<NetworkId>());
 
     int minimumActivity = 0;
@@ -517,7 +524,7 @@ bool BufferViewSettingsPage::testHasChanged()
         }
         else {
             changed = true;
-            iter++;
+            ++iter;
         }
     }
     return changed;

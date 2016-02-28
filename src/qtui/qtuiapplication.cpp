@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,9 +20,10 @@
 
 #include "qtuiapplication.h"
 
+#include <QIcon>
 #include <QStringList>
 
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
 #  include <KStandardDirs>
 #endif
 
@@ -32,37 +33,65 @@
 #include "qtui.h"
 #include "qtuisettings.h"
 
+
 QtUiApplication::QtUiApplication(int &argc, char **argv)
-#ifdef HAVE_KDE
-    : KApplication(),
+#ifdef HAVE_KDE4
+    : KApplication(),  // KApplication is deprecated in KF5
 #else
     : QApplication(argc, argv),
 #endif
     Quassel(),
     _aboutToQuit(false)
 {
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
     Q_UNUSED(argc); Q_UNUSED(argv);
 
-    // We need to setup KDE's data dirs
+    // Setup KDE's data dirs
+    // Because we can't use KDE stuff in (the class) Quassel directly, we need to do this here...
     QStringList dataDirs = KGlobal::dirs()->findDirs("data", "");
+
+    // Just in case, also check our install prefix
+    dataDirs << QCoreApplication::applicationDirPath() + "/../share/apps/";
+
+    // Normalize and append our application name
     for (int i = 0; i < dataDirs.count(); i++)
-        dataDirs[i].append("quassel/");
+        dataDirs[i] = QDir::cleanPath(dataDirs.at(i)) + "/quassel/";
+
+    // Add resource path and just in case.
+    // Workdir should have precedence
+    dataDirs.prepend(QCoreApplication::applicationDirPath() + "/data/");
     dataDirs.append(":/data/");
+
+    // Append trailing '/' and check for existence
+    auto iter = dataDirs.begin();
+    while (iter != dataDirs.end()) {
+        if (!iter->endsWith(QDir::separator()) && !iter->endsWith('/'))
+            iter->append(QDir::separator());
+        if (!QFile::exists(*iter))
+            iter = dataDirs.erase(iter);
+        else
+            ++iter;
+    }
+
+    dataDirs.removeDuplicates();
     setDataDirPaths(dataDirs);
 
-#else /* HAVE_KDE */
+#else /* HAVE_KDE4 */
 
     setDataDirPaths(findDataDirPaths());
 
-#endif /* HAVE_KDE */
+#endif /* HAVE_KDE4 */
 
-#if defined(HAVE_KDE) || defined(Q_OS_MAC)
+#if defined(HAVE_KDE4) || defined(Q_OS_MAC)
     disableCrashhandler();
-#endif /* HAVE_KDE || Q_OS_MAC */
+#endif /* HAVE_KDE4 || Q_OS_MAC */
     setRunMode(Quassel::ClientOnly);
 
+#if QT_VERSION < 0x050000
     qInstallMsgHandler(Client::logMessage);
+#else
+    qInstallMessageHandler(Client::logMessage);
+#endif
 }
 
 
@@ -71,11 +100,11 @@ bool QtUiApplication::init()
     if (Quassel::init()) {
         // FIXME: MIGRATION 0.3 -> 0.4: Move database and core config to new location
         // Move settings, note this does not delete the old files
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
         QSettings newSettings("quassel-irc.org", "quasselclient");
 #else
 
-# ifdef Q_WS_WIN
+# ifdef Q_OS_WIN
         QSettings::Format format = QSettings::IniFormat;
 # else
         QSettings::Format format = QSettings::NativeFormat;
@@ -84,10 +113,10 @@ bool QtUiApplication::init()
         QString newFilePath = Quassel::configDirPath() + "quasselclient"
                               + ((format == QSettings::NativeFormat) ? QLatin1String(".conf") : QLatin1String(".ini"));
         QSettings newSettings(newFilePath, format);
-#endif /* Q_WS_MAC */
+#endif /* Q_OS_MAC */
 
         if (newSettings.value("Config/Version").toUInt() == 0) {
-#     ifdef Q_WS_MAC
+#     ifdef Q_OS_MAC
             QString org = "quassel-irc.org";
 #     else
             QString org = "Quassel Project";
@@ -112,6 +141,13 @@ bool QtUiApplication::init()
             qCritical() << "Invalid client settings version, terminating!";
             return false;
         }
+
+        // Set the icon theme
+        if (Quassel::isOptionSet("icontheme"))
+            QIcon::setThemeName(Quassel::optionValue("icontheme"));
+        else if (QIcon::themeName().isEmpty())
+            // Some platforms don't set a default icon theme; chances are we can find our bundled Oxygen theme though
+            QIcon::setThemeName("oxygen");
 
         // session resume
         QtUi *gui = new QtUi();

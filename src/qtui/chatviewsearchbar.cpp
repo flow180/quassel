@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,18 +20,19 @@
 
 #include "chatviewsearchbar.h"
 
+#include <QIcon>
+
 #include "action.h"
 #include "actioncollection.h"
-#include "iconloader.h"
 #include "qtui.h"
 
 ChatViewSearchBar::ChatViewSearchBar(QWidget *parent)
     : QWidget(parent)
 {
     ui.setupUi(this);
-    ui.hideButton->setIcon(BarIcon("dialog-close"));
-    ui.searchUpButton->setIcon(SmallIcon("go-up"));
-    ui.searchDownButton->setIcon(SmallIcon("go-down"));
+    ui.hideButton->setIcon(QIcon::fromTheme("dialog-close"));
+    ui.searchUpButton->setIcon(QIcon::fromTheme("go-up"));
+    ui.searchDownButton->setIcon(QIcon::fromTheme("go-down"));
     _searchDelayTimer.setSingleShot(true);
 
     layout()->setContentsMargins(0, 0, 0, 0);

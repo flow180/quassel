@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -204,8 +204,9 @@ QItemSelection FlatProxyModel::mapSelectionToSource(const QItemSelection &proxyS
             row++;
         }
 
-        Q_ASSERT(topLeftItem && bottomRightItem); // there should be one range left.
-        sourceSelection << QItemSelectionRange(mapToSource(createIndex(topLeftItem->pos(), left, topLeftItem)), mapToSource(createIndex(bottomRightItem->pos(), right, bottomRightItem)));
+        if (topLeftItem && bottomRightItem) { // there should be one range left.
+            sourceSelection << QItemSelectionRange(mapToSource(createIndex(topLeftItem->pos(), left, topLeftItem)), mapToSource(createIndex(bottomRightItem->pos(), right, bottomRightItem)));
+        }
     }
 
     return sourceSelection;

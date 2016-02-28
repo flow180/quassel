@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -23,6 +23,7 @@
 #include <QDesktopServices>
 #include <QFontMetrics>
 #include <QGraphicsSceneMouseEvent>
+#include <QIcon>
 #include <QPainter>
 #include <QPalette>
 #include <QTextLayout>
@@ -35,7 +36,6 @@
 #include "chatlinemodel.h"
 #include "chatview.h"
 #include "contextmenuactionprovider.h"
-#include "iconloader.h"
 #include "mainwin.h"
 #include "qtui.h"
 #include "qtuistyle.h"
@@ -504,31 +504,29 @@ void SenderChatItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *op
 
     if (layoutWidth > width()) {
         // Draw a nice gradient for longer items
-        // Qt's text drawing with a gradient brush sucks, so we use an alpha-channeled pixmap instead
+        // Qt's text drawing with a gradient brush sucks, so we use compositing instead
         QPixmap pixmap(layout()->boundingRect().toRect().size());
         pixmap.fill(Qt::transparent);
+
         QPainter pixPainter(&pixmap);
         layout()->draw(&pixPainter, QPointF(qMax(offset, (qreal)0), 0), additionalFormats());
-        pixPainter.end();
 
         // Create alpha channel mask
-        QPixmap mask(pixmap.size());
-        QPainter maskPainter(&mask);
         QLinearGradient gradient;
         if (offset < 0) {
             gradient.setStart(0, 0);
             gradient.setFinalStop(12, 0);
-            gradient.setColorAt(0, Qt::black);
+            gradient.setColorAt(0, Qt::transparent);
             gradient.setColorAt(1, Qt::white);
         }
         else {
             gradient.setStart(width()-10, 0);
             gradient.setFinalStop(width(), 0);
             gradient.setColorAt(0, Qt::white);
-            gradient.setColorAt(1, Qt::black);
+            gradient.setColorAt(1, Qt::transparent);
         }
-        maskPainter.fillRect(0, 0, pixmap.width(), pixmap.height(), gradient);
-        pixmap.setAlphaChannel(mask);
+        pixPainter.setCompositionMode(QPainter::CompositionMode_DestinationIn); // gradient's alpha gets applied to the pixmap
+        pixPainter.fillRect(pixmap.rect(), gradient);
         painter->drawPixmap(pos(), pixmap);
     }
     else {
@@ -800,14 +798,13 @@ void ContentsChatItem::addActionsToMenu(QMenu *menu, const QPointF &pos)
         switch (click.type()) {
         case Clickable::Url:
             privateData()->activeClickable = click;
-            menu->addAction(SmallIcon("edit-copy"), tr("Copy Link Address"),
+            menu->addAction(QIcon::fromTheme("edit-copy"), tr("Copy Link Address"),
                 &_actionProxy, SLOT(copyLinkToClipboard()))->setData(QVariant::fromValue<void *>(this));
             break;
         case Clickable::Channel:
         {
-            // Hide existing menu actions, they confuse us when right-clicking on a clickable
-            foreach(QAction *action, menu->actions())
-            action->setVisible(false);
+            // Remove existing menu actions, they confuse us when right-clicking on a clickable
+            menu->clear();
             QString name = data(ChatLineModel::DisplayRole).toString().mid(click.start(), click.length());
             GraphicalUi::contextMenuActionProvider()->addActions(menu, chatScene()->filter(), data(MessageModel::BufferIdRole).value<BufferId>(), name);
             break;

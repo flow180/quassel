@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -24,6 +24,7 @@
 #  include <QSslSocket>
 #endif
 
+#include <QDateTime>
 #include <QFile>
 
 #include "logger.h"
@@ -36,7 +37,23 @@ SslServer::SslServer(QObject *parent)
     _isCertValid(false)
 {
     static bool sslWarningShown = false;
-    if (!setCertificate(Quassel::configDirPath() + "quasselCert.pem")) {
+
+    QString ssl_cert;
+    QString ssl_key;
+
+    if(Quassel::isOptionSet("ssl-cert")) {
+        ssl_cert = Quassel::optionValue("ssl-cert");
+    } else {
+        ssl_cert = Quassel::configDirPath() + "quasselCert.pem";
+    }
+
+    if(Quassel::isOptionSet("ssl-key")) {
+        ssl_key = Quassel::optionValue("ssl-key");
+    } else {
+        ssl_key = ssl_cert;
+    }
+
+    if (!setCertificate(ssl_cert, ssl_key)) {
         if (!sslWarningShown) {
             quWarning()
             << "SslServer: Unable to set certificate file\n"
@@ -56,8 +73,11 @@ QTcpSocket *SslServer::nextPendingConnection()
         return _pendingConnections.takeFirst();
 }
 
-
+#if QT_VERSION >= 0x050000
+void SslServer::incomingConnection(qintptr socketDescriptor)
+#else
 void SslServer::incomingConnection(int socketDescriptor)
+#endif
 {
     QSslSocket *serverSocket = new QSslSocket(this);
     if (serverSocket->setSocketDescriptor(socketDescriptor)) {
@@ -75,7 +95,7 @@ void SslServer::incomingConnection(int socketDescriptor)
 }
 
 
-bool SslServer::setCertificate(const QString &path)
+bool SslServer::setCertificate(const QString &path, const QString &keyPath)
 {
     _isCertValid = false;
 
@@ -113,18 +133,52 @@ bool SslServer::setCertificate(const QString &path)
         return false;
     }
 
-    _key = QSslKey(&certFile, QSsl::Rsa);
+    // load key from keyPath if it differs from path, otherwise load key from path
+    if(path != keyPath) {
+        QFile keyFile(keyPath);
+        if(!keyFile.exists()) {
+            quWarning() << "SslServer: Key file" << qPrintable(keyPath) << "does not exist";
+            return false;
+        }
+
+        if (!keyFile.open(QIODevice::ReadOnly)) {
+            quWarning()
+            << "SslServer: Failed to open key file" << qPrintable(keyPath)
+            << "error:" << keyFile.error();
+            return false;
+        }
+
+        _key = QSslKey(&keyFile, QSsl::Rsa);
+        keyFile.close();
+    } else {
+        _key = QSslKey(&certFile, QSsl::Rsa);
+    }
+
     certFile.close();
 
     if (_cert.isNull()) {
         quWarning() << "SslServer:" << qPrintable(path) << "contains no certificate data";
         return false;
     }
-    if (!_cert.isValid()) {
-        quWarning() << "SslServer: Invalid certificate (most likely expired)";
+
+    // We allow the core to offer SSL anyway, so no "return false" here. Client will warn about the cert being invalid.
+    const QDateTime now = QDateTime::currentDateTime();
+    if (now < _cert.effectiveDate())
+        quWarning() << "SslServer: Certificate won't be valid before" << _cert.effectiveDate().toString();
+
+    else if (now > _cert.expiryDate())
+        quWarning() << "SslServer: Certificate expired on" << _cert.expiryDate().toString();
+
+    else { // Qt4's isValid() checks for time range and blacklist; avoid a double warning, hence the else block
+#if QT_VERSION < 0x050000
+        if (!_cert.isValid())
+#else
+        if (_cert.isBlacklisted())
+#endif
+            quWarning() << "SslServer: Certificate blacklisted";
     }
     if (_key.isNull()) {
-        quWarning() << "SslServer:" << qPrintable(path) << "contains no key data";
+        quWarning() << "SslServer:" << qPrintable(keyPath) << "contains no key data";
         return false;
     }
 

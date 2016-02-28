@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -25,6 +25,8 @@
 
 #include "ui_aboutdlg.h"
 
+class AboutData;
+
 class AboutDlg : public QDialog
 {
     Q_OBJECT
@@ -39,6 +41,8 @@ private:
     QString authors() const;
     QString contributors() const;
     QString thanksTo() const;
+
+    AboutData *_aboutData;
 };
 
 

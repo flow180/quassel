@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,21 +20,28 @@
 
 #include "mainwin.h"
 
+#include <QIcon>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStatusBar>
 #include <QToolBar>
+#include <QInputDialog>
 
-#ifdef HAVE_KDE
-#  include <KAction>
-#  include <KActionCollection>
+#ifdef HAVE_KDE4
 #  include <KHelpMenu>
 #  include <KMenuBar>
 #  include <KShortcutsDialog>
 #  include <KStatusBar>
 #  include <KToggleFullScreenAction>
 #  include <KToolBar>
-#  include <KWindowSystem>
+#endif
+
+#ifdef HAVE_KF5
+#  include <KConfigWidgets/KStandardAction>
+#  include <KXmlGui/KHelpMenu>
+#  include <KXmlGui/KShortcutsDialog>
+#  include <KXmlGui/KToolBar>
+#  include <KWidgetsAddons/KToggleFullScreenAction>
 #endif
 
 #ifdef Q_WS_X11
@@ -62,6 +69,8 @@
 #include "clientbufferviewconfig.h"
 #include "clientbufferviewmanager.h"
 #include "clientignorelistmanager.h"
+#include "clienttransfer.h"
+#include "clienttransfermanager.h"
 #include "coreconfigwizard.h"
 #include "coreconnectdlg.h"
 #include "coreconnection.h"
@@ -72,17 +81,18 @@
 #include "debuglogwidget.h"
 #include "debugmessagemodelfilter.h"
 #include "flatproxymodel.h"
-#include "iconloader.h"
 #include "inputwidget.h"
 #include "irclistmodel.h"
 #include "ircconnectionwizard.h"
 #include "legacysystemtray.h"
 #include "msgprocessorstatuswidget.h"
 #include "nicklistwidget.h"
+#include "passwordchangedlg.h"
 #include "qtuiapplication.h"
 #include "qtuimessageprocessor.h"
 #include "qtuisettings.h"
 #include "qtuistyle.h"
+#include "receivefiledlg.h"
 #include "settingsdlg.h"
 #include "settingspagedlg.h"
 #include "statusnotifieritem.h"
@@ -100,12 +110,25 @@
 #  include "knotificationbackend.h"
 #endif /* HAVE_KDE */
 
+
+#ifdef HAVE_LIBSNORE
+#  include "snorenotificationbackend.h"
+#endif
+
 #ifdef HAVE_SSL
 #  include "sslinfodlg.h"
 #endif
 
 #ifdef HAVE_INDICATEQT
   #include "indicatornotificationbackend.h"
+#endif
+
+#ifdef HAVE_NOTIFICATION_CENTER
+  #include "osxnotificationbackend.h"
+#endif
+
+#ifdef HAVE_DBUS
+  #include "dockmanagernotificationbackend.h"
 #endif
 
 #include "settingspages/aliasessettingspage.h"
@@ -132,8 +155,7 @@
 
 MainWin::MainWin(QWidget *parent)
 #ifdef HAVE_KDE
-    : KMainWindow(parent),
-    _kHelpMenu(new KHelpMenu(this, KGlobal::mainComponent().aboutData())),
+    : KMainWindow(parent), _kHelpMenu(new KHelpMenu(this)),
 #else
     : QMainWindow(parent),
 #endif
@@ -204,18 +226,28 @@ void MainWin::init()
 #  ifdef HAVE_PHONON
     QtUi::registerNotificationBackend(new PhononNotificationBackend(this));
 #  endif
-#  ifndef QT_NO_SYSTEMTRAYICON
-    QtUi::registerNotificationBackend(new SystrayNotificationBackend(this));
-#  endif
-
     QtUi::registerNotificationBackend(new TaskbarNotificationBackend(this));
-
 #else /* HAVE_KDE */
     QtUi::registerNotificationBackend(new KNotificationBackend(this));
 #endif /* HAVE_KDE */
 
+
+#ifdef HAVE_LIBSNORE
+    QtUi::registerNotificationBackend(new SnoreNotificationBackend(this));
+#elif !defined(QT_NO_SYSTEMTRAYICON) && !defined(HAVE_KDE)
+    QtUi::registerNotificationBackend(new SystrayNotificationBackend(this));
+#endif
+
 #ifdef HAVE_INDICATEQT
     QtUi::registerNotificationBackend(new IndicatorNotificationBackend(this));
+#endif
+
+#ifdef HAVE_NOTIFICATION_CENTER
+    QtUi::registerNotificationBackend(new OSXNotificationBackend(this));
+#endif
+
+#ifdef HAVE_DBUS
+    QtUi::registerNotificationBackend(new DockManagerNotificationBackend(this));
 #endif
 
     // we assume that at this point, all configurable actions are defined!
@@ -298,7 +330,9 @@ void MainWin::restoreStateFromSettings(UiSettings &s)
     move(_normalPos);
 #endif
 
-    if (s.value("MainWinHidden").toBool() && QtUi::haveSystemTray())
+    if ((Quassel::isOptionSet("hidewindow")
+            || s.value("MainWinHidden").toBool())
+            && _systemTray->isSystemTrayAvailable())
         QtUi::hideMainWidget();
     else if (s.value("MainWinMinimized").toBool())
         showMinimized();
@@ -311,17 +345,11 @@ void MainWin::restoreStateFromSettings(UiSettings &s)
 
 void MainWin::updateIcon()
 {
-#ifdef Q_WS_MAC
-    const int size = 128;
-#else
-    const int size = 48;
-#endif
-
-    QPixmap icon;
+    QIcon icon;
     if (Client::isConnected())
-        icon = DesktopIcon("quassel", size);
+        icon = QIcon::fromTheme("quassel", QIcon(":/icons/quassel-128.png"));
     else
-        icon = DesktopIcon("quassel-inactive", size);
+        icon = QIcon::fromTheme("quassel-inactive", QIcon(":/icons/quassel-128.png"));
     setWindowIcon(icon);
     qApp->setWindowIcon(icon);
 }
@@ -331,16 +359,18 @@ void MainWin::setupActions()
 {
     ActionCollection *coll = QtUi::actionCollection("General", tr("General"));
     // File
-    coll->addAction("ConnectCore", new Action(SmallIcon("network-connect"), tr("&Connect to Core..."), coll,
+    coll->addAction("ConnectCore", new Action(QIcon::fromTheme("network-connect"), tr("&Connect to Core..."), coll,
             this, SLOT(showCoreConnectionDlg())));
-    coll->addAction("DisconnectCore", new Action(SmallIcon("network-disconnect"), tr("&Disconnect from Core"), coll,
+    coll->addAction("DisconnectCore", new Action(QIcon::fromTheme("network-disconnect"), tr("&Disconnect from Core"), coll,
             Client::instance(), SLOT(disconnectFromCore())));
-    coll->addAction("CoreInfo", new Action(SmallIcon("help-about"), tr("Core &Info..."), coll,
+    coll->addAction("ChangePassword", new Action(QIcon::fromTheme("dialog-password"), tr("Change &Password..."), coll,
+            this, SLOT(showPasswordChangeDlg())));
+    coll->addAction("CoreInfo", new Action(QIcon::fromTheme("help-about"), tr("Core &Info..."), coll,
             this, SLOT(showCoreInfoDlg())));
-    coll->addAction("ConfigureNetworks", new Action(SmallIcon("configure"), tr("Configure &Networks..."), coll,
+    coll->addAction("ConfigureNetworks", new Action(QIcon::fromTheme("configure"), tr("Configure &Networks..."), coll,
             this, SLOT(on_actionConfigureNetworks_triggered())));
     // FIXME: use QKeySequence::Quit once we depend on Qt 4.6
-    coll->addAction("Quit", new Action(SmallIcon("application-exit"), tr("&Quit"), coll,
+    coll->addAction("Quit", new Action(QIcon::fromTheme("application-exit"), tr("&Quit"), coll,
             this, SLOT(quit()), Qt::CTRL + Qt::Key_Q));
 
     // View
@@ -351,43 +381,43 @@ void MainWin::setupActions()
     lockAct->setCheckable(true);
     connect(lockAct, SIGNAL(toggled(bool)), SLOT(on_actionLockLayout_toggled(bool)));
 
-    coll->addAction("ToggleSearchBar", new Action(SmallIcon("edit-find"), tr("Show &Search Bar"), coll,
+    coll->addAction("ToggleSearchBar", new Action(QIcon::fromTheme("edit-find"), tr("Show &Search Bar"), coll,
             0, 0, QKeySequence::Find))->setCheckable(true);
     coll->addAction("ShowAwayLog", new Action(tr("Show Away Log"), coll,
             this, SLOT(showAwayLog())));
-    coll->addAction("ToggleMenuBar", new Action(SmallIcon("show-menu"), tr("Show &Menubar"), coll,
+    coll->addAction("ToggleMenuBar", new Action(QIcon::fromTheme("show-menu"), tr("Show &Menubar"), coll,
             0, 0, QKeySequence(Qt::CTRL + Qt::Key_M)))->setCheckable(true);
 
     coll->addAction("ToggleStatusBar", new Action(tr("Show Status &Bar"), coll,
             0, 0))->setCheckable(true);
 
 #ifdef HAVE_KDE
-    QAction *fullScreenAct = KStandardAction::fullScreen(this, SLOT(toggleFullscreen()), this, coll);
+    _fullScreenAction = KStandardAction::fullScreen(this, SLOT(onFullScreenToggled()), this, coll);
 #else
-    QAction *fullScreenAct = new Action(SmallIcon("view-fullscreen"), tr("&Full Screen Mode"), coll,
-        this, SLOT(toggleFullscreen()), QKeySequence(Qt::Key_F11));
-    fullScreenAct->setCheckable(true);
+    _fullScreenAction = new Action(QIcon::fromTheme("view-fullscreen"), tr("&Full Screen Mode"), coll,
+        this, SLOT(onFullScreenToggled()), QKeySequence(Qt::Key_F11));
+    _fullScreenAction->setCheckable(true);
+    coll->addAction("ToggleFullScreen", _fullScreenAction);
 #endif
-    coll->addAction("ToggleFullscreen", fullScreenAct);
 
     // Settings
-    QAction *configureShortcutsAct = new Action(SmallIcon("configure-shortcuts"), tr("Configure &Shortcuts..."), coll,
+    QAction *configureShortcutsAct = new Action(QIcon::fromTheme("configure-shortcuts"), tr("Configure &Shortcuts..."), coll,
         this, SLOT(showShortcutsDlg()));
     configureShortcutsAct->setMenuRole(QAction::NoRole);
     coll->addAction("ConfigureShortcuts", configureShortcutsAct);
 
-  #ifdef Q_WS_MAC
-    QAction *configureQuasselAct = new Action(SmallIcon("configure"), tr("&Configure Quassel..."), coll,
+#ifdef Q_OS_MAC
+    QAction *configureQuasselAct = new Action(QIcon::fromTheme("configure"), tr("&Configure Quassel..."), coll,
         this, SLOT(showSettingsDlg()));
     configureQuasselAct->setMenuRole(QAction::PreferencesRole);
-  #else
-    QAction *configureQuasselAct = new Action(SmallIcon("configure"), tr("&Configure Quassel..."), coll,
+#else
+    QAction *configureQuasselAct = new Action(QIcon::fromTheme("configure"), tr("&Configure Quassel..."), coll,
         this, SLOT(showSettingsDlg()), QKeySequence(Qt::Key_F7));
-  #endif
+#endif
     coll->addAction("ConfigureQuassel", configureQuasselAct);
 
     // Help
-    QAction *aboutQuasselAct = new Action(SmallIcon("quassel"), tr("&About Quassel"), coll,
+    QAction *aboutQuasselAct = new Action(QIcon(":/icons/quassel.png"), tr("&About Quassel"), coll,
         this, SLOT(showAboutDlg()));
     aboutQuasselAct->setMenuRole(QAction::AboutRole);
     coll->addAction("AboutQuassel", aboutQuasselAct);
@@ -396,17 +426,17 @@ void MainWin::setupActions()
         qApp, SLOT(aboutQt()));
     aboutQtAct->setMenuRole(QAction::AboutQtRole);
     coll->addAction("AboutQt", aboutQtAct);
-    coll->addAction("DebugNetworkModel", new Action(SmallIcon("tools-report-bug"), tr("Debug &NetworkModel"), coll,
+    coll->addAction("DebugNetworkModel", new Action(QIcon::fromTheme("tools-report-bug"), tr("Debug &NetworkModel"), coll,
             this, SLOT(on_actionDebugNetworkModel_triggered())));
-    coll->addAction("DebugBufferViewOverlay", new Action(SmallIcon("tools-report-bug"), tr("Debug &BufferViewOverlay"), coll,
+    coll->addAction("DebugBufferViewOverlay", new Action(QIcon::fromTheme("tools-report-bug"), tr("Debug &BufferViewOverlay"), coll,
             this, SLOT(on_actionDebugBufferViewOverlay_triggered())));
-    coll->addAction("DebugMessageModel", new Action(SmallIcon("tools-report-bug"), tr("Debug &MessageModel"), coll,
+    coll->addAction("DebugMessageModel", new Action(QIcon::fromTheme("tools-report-bug"), tr("Debug &MessageModel"), coll,
             this, SLOT(on_actionDebugMessageModel_triggered())));
-    coll->addAction("DebugHotList", new Action(SmallIcon("tools-report-bug"), tr("Debug &HotList"), coll,
+    coll->addAction("DebugHotList", new Action(QIcon::fromTheme("tools-report-bug"), tr("Debug &HotList"), coll,
             this, SLOT(on_actionDebugHotList_triggered())));
-    coll->addAction("DebugLog", new Action(SmallIcon("tools-report-bug"), tr("Debug &Log"), coll,
+    coll->addAction("DebugLog", new Action(QIcon::fromTheme("tools-report-bug"), tr("Debug &Log"), coll,
             this, SLOT(on_actionDebugLog_triggered())));
-    coll->addAction("ReloadStyle", new Action(SmallIcon("view-refresh"), tr("Reload Stylesheet"), coll,
+    coll->addAction("ReloadStyle", new Action(QIcon::fromTheme("view-refresh"), tr("Reload Stylesheet"), coll,
             QtUi::style(), SLOT(reload()), QKeySequence::Refresh));
 
     coll->addAction("HideCurrentBuffer", new Action(tr("Hide Current Buffer"), coll,
@@ -419,7 +449,7 @@ void MainWin::setupActions()
             this, SLOT(on_jumpHotBuffer_triggered()), QKeySequence(Qt::META + Qt::Key_A)));
 
     // Jump keys
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     const int bindModifier = Qt::ControlModifier | Qt::AltModifier;
     const int jumpModifier = Qt::ControlModifier;
 #else
@@ -470,13 +500,13 @@ void MainWin::setupActions()
             QKeySequence(jumpModifier + Qt::Key_9)))->setProperty("Index", 9);
 
     // Buffer navigation
-    coll->addAction("NextBufferView", new Action(SmallIcon("go-next-view"), tr("Activate Next Chat List"), coll,
+    coll->addAction("NextBufferView", new Action(QIcon::fromTheme("go-next-view"), tr("Activate Next Chat List"), coll,
             this, SLOT(nextBufferView()), QKeySequence(QKeySequence::Forward)));
-    coll->addAction("PreviousBufferView", new Action(SmallIcon("go-previous-view"), tr("Activate Previous Chat List"), coll,
+    coll->addAction("PreviousBufferView", new Action(QIcon::fromTheme("go-previous-view"), tr("Activate Previous Chat List"), coll,
             this, SLOT(previousBufferView()), QKeySequence::Back));
-    coll->addAction("NextBuffer", new Action(SmallIcon("go-down"), tr("Go to Next Chat"), coll,
+    coll->addAction("NextBuffer", new Action(QIcon::fromTheme("go-down"), tr("Go to Next Chat"), coll,
             this, SLOT(nextBuffer()), QKeySequence(Qt::ALT + Qt::Key_Down)));
-    coll->addAction("PreviousBuffer", new Action(SmallIcon("go-up"), tr("Go to Previous Chat"), coll,
+    coll->addAction("PreviousBuffer", new Action(QIcon::fromTheme("go-up"), tr("Go to Previous Chat"), coll,
             this, SLOT(previousBuffer()), QKeySequence(Qt::ALT + Qt::Key_Up)));
 }
 
@@ -488,7 +518,7 @@ void MainWin::setupMenus()
     _fileMenu = menuBar()->addMenu(tr("&File"));
 
     static const QStringList coreActions = QStringList()
-                                           << "ConnectCore" << "DisconnectCore" << "CoreInfo";
+        << "ConnectCore" << "DisconnectCore" << "ChangePassword" << "CoreInfo";
 
     QAction *coreAction;
     foreach(QString actionName, coreActions) {
@@ -530,7 +560,9 @@ void MainWin::setupMenus()
 #endif
     _settingsMenu->addAction(coll->action("ConfigureQuassel"));
 
+
     _helpMenu = menuBar()->addMenu(tr("&Help"));
+
     _helpMenu->addAction(coll->action("AboutQuassel"));
 #ifndef HAVE_KDE
     _helpMenu->addAction(coll->action("AboutQt"));
@@ -538,7 +570,7 @@ void MainWin::setupMenus()
     _helpMenu->addAction(KStandardAction::aboutKDE(_kHelpMenu, SLOT(aboutKDE()), this));
 #endif
     _helpMenu->addSeparator();
-    _helpDebugMenu = _helpMenu->addMenu(SmallIcon("tools-report-bug"), tr("Debug"));
+    _helpDebugMenu = _helpMenu->addMenu(QIcon::fromTheme("tools-report-bug"), tr("Debug"));
     _helpDebugMenu->addAction(coll->action("DebugNetworkModel"));
     _helpDebugMenu->addAction(coll->action("DebugBufferViewOverlay"));
     _helpDebugMenu->addAction(coll->action("DebugMessageModel"));
@@ -634,7 +666,7 @@ void MainWin::removeBufferView(int bufferViewConfigId)
 
 void MainWin::bufferViewToggled(bool enabled)
 {
-    if (!enabled && !isVisible()) {
+    if (!enabled && !isMinimized()) {
         // hiding the mainwindow triggers a toggle of the bufferview (which pretty much sucks big time)
         // since this isn't our fault and we can't do anything about it, we suppress the resulting calls
         return;
@@ -704,6 +736,22 @@ void MainWin::changeActiveBufferView(int bufferViewId)
     }
 
     nextBufferView(); // fallback
+}
+
+
+void MainWin::showPasswordChangeDlg()
+{
+    if((Client::coreFeatures() & Quassel::PasswordChange)) {
+        PasswordChangeDlg dlg(this);
+        dlg.exec();
+    }
+    else {
+        QMessageBox box(QMessageBox::Warning, tr("Feature Not Supported"),
+                        tr("<b>Your Quassel Core does not support this feature</b>"),
+                        QMessageBox::Ok, this);
+        box.setInformativeText(tr("You need a Quassel Core v0.12.0 or newer in order to be able to remotely change your password."));
+        box.exec();
+    }
 }
 
 
@@ -897,7 +945,7 @@ void MainWin::setupTopicWidget()
 void MainWin::setupViewMenuTail()
 {
     _viewMenu->addSeparator();
-    _viewMenu->addAction(QtUi::actionCollection("General")->action("ToggleFullscreen"));
+    _viewMenu->addAction(_fullScreenAction);
 }
 
 
@@ -974,7 +1022,7 @@ void MainWin::setupToolBars()
     connect(_nickListWidget, SIGNAL(nickSelectionChanged(QModelIndexList)),
         QtUi::toolBarActionProvider(), SLOT(nickSelectionChanged(QModelIndexList)));
 
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     setUnifiedTitleAndToolBarOnMac(true);
 #endif
 
@@ -989,6 +1037,24 @@ void MainWin::setupToolBars()
 
     QtUi::toolBarActionProvider()->addActions(_mainToolBar, ToolBarActionProvider::MainToolBar);
     _toolbarMenu->addAction(_mainToolBar->toggleViewAction());
+
+#ifdef Q_OS_MAC
+    QtUiSettings uiSettings;
+
+    bool visible = uiSettings.value("ShowMainToolBar", QVariant(true)).toBool();
+    _mainToolBar->setVisible(visible);
+    connect(_mainToolBar, SIGNAL(visibilityChanged(bool)), this, SLOT(saveMainToolBarStatus(bool)));
+#endif
+}
+
+void MainWin::saveMainToolBarStatus(bool enabled)
+{
+#ifdef Q_OS_MAC
+    QtUiSettings uiSettings;
+    uiSettings.setValue("ShowMainToolBar", enabled);
+#else
+    Q_UNUSED(enabled);
+#endif
 }
 
 
@@ -998,6 +1064,8 @@ void MainWin::connectedToCore()
     connect(Client::bufferViewManager(), SIGNAL(bufferViewConfigAdded(int)), this, SLOT(addBufferView(int)));
     connect(Client::bufferViewManager(), SIGNAL(bufferViewConfigDeleted(int)), this, SLOT(removeBufferView(int)));
     connect(Client::bufferViewManager(), SIGNAL(initDone()), this, SLOT(loadLayout()));
+
+    connect(Client::transferManager(), SIGNAL(transferAdded(const ClientTransfer*)), SLOT(showNewTransferDlg(const ClientTransfer*)));
 
     setConnectedState();
 }
@@ -1009,6 +1077,7 @@ void MainWin::setConnectedState()
 
     coll->action("ConnectCore")->setEnabled(false);
     coll->action("DisconnectCore")->setEnabled(true);
+    coll->action("ChangePassword")->setEnabled(true);
     coll->action("CoreInfo")->setEnabled(true);
 
     foreach(QAction *action, _fileMenu->actions()) {
@@ -1125,6 +1194,7 @@ void MainWin::setDisconnectedState()
     coll->action("ConnectCore")->setEnabled(true);
     coll->action("DisconnectCore")->setEnabled(false);
     coll->action("CoreInfo")->setEnabled(false);
+    coll->action("ChangePassword")->setEnabled(false);
     //_viewMenu->setEnabled(false);
     statusBar()->showMessage(tr("Not connected to core."));
     if (_msgProcessorStatusWidget)
@@ -1327,7 +1397,7 @@ void MainWin::showShortcutsDlg()
     KShortcutsDialog dlg(KShortcutsEditor::AllActions, KShortcutsEditor::LetterShortcutsDisallowed, this);
     foreach(KActionCollection *coll, QtUi::actionCollections())
     dlg.addCollection(coll, coll->property("Category").toString());
-    dlg.exec();
+    dlg.configure(true);
 #else
     SettingsPageDlg dlg(new ShortcutsSettingsPage(QtUi::actionCollections(), this), this);
     dlg.exec();
@@ -1335,12 +1405,26 @@ void MainWin::showShortcutsDlg()
 }
 
 
-void MainWin::toggleFullscreen()
+void MainWin::showNewTransferDlg(const ClientTransfer *transfer)
 {
-    if (isFullScreen())
-        showNormal();
+    ReceiveFileDlg *dlg = new ReceiveFileDlg(transfer, this);
+    dlg->show();
+}
+
+
+void MainWin::onFullScreenToggled()
+{
+    // Relying on QWidget::isFullScreen is discouraged, see the KToggleFullScreenAction docs
+    // Also, one should not use showFullScreen() or showNormal(), as those reset all other window flags
+
+#ifdef HAVE_KDE
+    static_cast<KToggleFullScreenAction*>(_fullScreenAction)->setFullScreen(this, _fullScreenAction->isChecked());
+#else
+    if (_fullScreenAction->isChecked())
+        setWindowState(windowState() | Qt::WindowFullScreen);
     else
-        showFullScreen();
+        setWindowState(windowState() & ~Qt::WindowFullScreen);
+#endif
 }
 
 
@@ -1348,10 +1432,19 @@ void MainWin::toggleFullscreen()
 
 bool MainWin::event(QEvent *event)
 {
-    if (event->type() == QEvent::WindowActivate) {
-        BufferId buffer = Client::bufferModel()->currentBuffer();
-        if (buffer.isValid())
-            Client::instance()->markBufferAsRead(buffer);
+    switch(event->type()) {
+    case QEvent::WindowActivate: {
+        BufferId bufferId = Client::bufferModel()->currentBuffer();
+        if (bufferId.isValid())
+            Client::instance()->markBufferAsRead(bufferId);
+        break;
+    }
+    case QEvent::WindowDeactivate:
+        if (bufferWidget()->autoMarkerLineOnLostFocus())
+            bufferWidget()->setMarkerLine();
+        break;
+    default:
+        break;
     }
     return QMainWindow::event(event);
 }
@@ -1490,7 +1583,7 @@ void MainWin::clientNetworkUpdated()
 
     switch (net->connectionState()) {
     case Network::Initialized:
-        action->setIcon(SmallIcon("network-connect"));
+        action->setIcon(QIcon::fromTheme("network-connect"));
         // if we have no currently selected buffer, jump to the first connecting statusbuffer
         if (!bufferWidget()->currentBuffer().isValid()) {
             QModelIndex idx = Client::networkModel()->networkIndex(net->networkId());
@@ -1501,10 +1594,10 @@ void MainWin::clientNetworkUpdated()
         }
         break;
     case Network::Disconnected:
-        action->setIcon(SmallIcon("network-disconnect"));
+        action->setIcon(QIcon::fromTheme("network-disconnect"));
         break;
     default:
-        action->setIcon(SmallIcon("network-wired"));
+        action->setIcon(QIcon::fromTheme("network-wired"));
     }
 }
 
@@ -1535,9 +1628,7 @@ void MainWin::on_jumpHotBuffer_triggered()
     if (!_bufferHotList->rowCount())
         return;
 
-    QModelIndex topIndex = _bufferHotList->index(0, 0);
-    BufferId bufferId = _bufferHotList->data(topIndex, NetworkModel::BufferIdRole).value<BufferId>();
-    Client::bufferModel()->switchToBuffer(bufferId);
+    Client::bufferModel()->switchToBuffer(_bufferHotList->hottestBuffer());
 }
 
 
@@ -1588,6 +1679,9 @@ void MainWin::on_actionDebugNetworkModel_triggered()
 
 void MainWin::on_actionDebugHotList_triggered()
 {
+    _bufferHotList->invalidate();
+    _bufferHotList->sort(0, Qt::DescendingOrder);
+
     QTreeView *view = new QTreeView;
     view->setAttribute(Qt::WA_DeleteOnClose);
     view->setModel(_bufferHotList);

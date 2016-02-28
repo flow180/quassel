@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -156,7 +156,11 @@ void StyledLabel::setText(const QString &text)
 void StyledLabel::updateToolTip()
 {
     if (frameRect().width() - 2*frameWidth() < _layout.minimumWidth())
+#if QT_VERSION < 0x050000
         setToolTip(QString("<qt>%1</qt>").arg(Qt::escape(_layout.text())));  // only rich text gets wordwrapped!
+#else
+        setToolTip(QString("<qt>%1</qt>").arg(_layout.text().toHtmlEscaped()));  // only rich text gets wordwrapped!
+#endif
     else
         setToolTip(QString());
 }
@@ -212,7 +216,11 @@ int StyledLabel::posToCursor(const QPointF &pos)
 void StyledLabel::mouseMoveEvent(QMouseEvent *event)
 {
     if (event->buttons() == Qt::NoButton) {
+#if QT_VERSION < 0x050000
         Clickable click = _clickables.atCursorPos(posToCursor(event->posF()));
+#else
+        Clickable click = _clickables.atCursorPos(posToCursor(event->localPos()));
+#endif
         if (click.isValid())
             setHoverMode(click.start(), click.length());
         else
@@ -239,7 +247,11 @@ void StyledLabel::leaveEvent(QEvent *)
 void StyledLabel::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
+#if QT_VERSION < 0x050000
         Clickable click = _clickables.atCursorPos(posToCursor(event->posF()));
+#else
+        Clickable click = _clickables.atCursorPos(posToCursor(event->localPos()));
+#endif
         if (click.isValid())
             emit clickableActivated(click);
     }

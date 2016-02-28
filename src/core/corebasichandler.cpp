@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -32,6 +32,9 @@ CoreBasicHandler::CoreBasicHandler(CoreNetwork *parent)
 
     connect(this, SIGNAL(putCmd(QString, const QList<QByteArray> &, const QByteArray &)),
         network(), SLOT(putCmd(QString, const QList<QByteArray> &, const QByteArray &)));
+
+    connect(this, SIGNAL(putCmd(QString, const QList<QList<QByteArray>> &, const QByteArray &)),
+        network(), SLOT(putCmd(QString, const QList<QList<QByteArray>> &, const QByteArray &)));
 
     connect(this, SIGNAL(putRawLine(const QByteArray &)),
         network(), SLOT(putRawLine(const QByteArray &)));
@@ -144,19 +147,4 @@ void CoreBasicHandler::putCmd(const QString &cmd, const QByteArray &param, const
     QList<QByteArray> list;
     list << param;
     emit putCmd(cmd, list, prefix);
-}
-
-
-void CoreBasicHandler::displayMsg(Message::Type msgType, QString target, const QString &text, const QString &sender, Message::Flags flags)
-{
-    IrcChannel *channel = network()->ircChannel(target);
-    if (!channel) {
-        if (!target.isEmpty() && network()->prefixes().contains(target[0]))
-            target = target.mid(1);
-
-        if (target.startsWith('$') || target.startsWith('#'))
-            target = nickFromMask(sender);
-    }
-
-    emit displayMsg(msgType, typeByTarget(target), target, text, sender, flags);
 }

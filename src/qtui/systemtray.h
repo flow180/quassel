@@ -1,11 +1,11 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) version 3.                                           *
+ *   This file is free software; you can redistribute it and/or modify     *
+ *   it under the terms of the GNU Library General Public License (LGPL)   *
+ *   as published by the Free Software Foundation; either version 2 of the *
+ *   License, or (at your option) any later version.                       *
  *                                                                         *
  *   This program is distributed in the hope that it will be useful,       *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
@@ -21,7 +21,7 @@
 #ifndef SYSTEMTRAY_H_
 #define SYSTEMTRAY_H_
 
-#include "icon.h"
+#include <QIcon>
 
 class Action;
 class QMenu;
@@ -84,7 +84,7 @@ public slots:
 
 signals:
     void activated(SystemTray::ActivationReason);
-    void iconChanged(const Icon &);
+    void iconChanged(const QIcon &icon);
     void animationEnabledChanged(bool);
     void toolTipChanged(const QString &title, const QString &subtitle);
     void messageClicked(uint notificationId);
@@ -97,8 +97,8 @@ protected:
     virtual void setMode(Mode mode);
     inline bool shouldBeVisible() const;
 
-    virtual Icon stateIcon() const;
-    Icon stateIcon(State state) const;
+    virtual QIcon stateIcon() const;
+    QIcon stateIcon(State state) const;
     inline QString toolTipTitle() const;
     inline QString toolTipSubTitle() const;
     inline QMenu *trayMenu() const;
@@ -116,7 +116,7 @@ private:
     bool _shouldBeVisible;
 
     QString _toolTipTitle, _toolTipSubTitle;
-    Icon _passiveIcon, _activeIcon, _needsAttentionIcon;
+    QIcon _passiveIcon, _activeIcon, _needsAttentionIcon;
     bool _animationEnabled;
 
     QMenu *_trayMenu;

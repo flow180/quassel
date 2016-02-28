@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -104,6 +104,10 @@ void EventStringifier::processIrcEventNumeric(IrcEventNumeric *e)
     case 253:
     case 254:
     case 255:
+    case 256:
+    case 257:
+    case 258:
+    case 259:
     case 265:
     case 266:
     case 372:
@@ -112,6 +116,7 @@ void EventStringifier::processIrcEventNumeric(IrcEventNumeric *e)
         break;
 
     // Server error messages without param, just display them
+    case 263:
     case 409:
     case 411:
     case 412:
@@ -461,14 +466,14 @@ void EventStringifier::processIrcEvent317(IrcEvent *e)
     int idleSecs = e->params()[1].toInt();
 
     if (e->params().count() > 3) { // if we have more then 3 params we have the above mentioned "real life" situation
-        QDateTime loginTime = QDateTime::fromTime_t(e->params()[2].toInt());
+        QDateTime loginTime = QDateTime::fromTime_t(e->params()[2].toInt()).toUTC();
         displayMsg(e, Message::Server, tr("[Whois] %1 is logged in since %2")
-	    .arg(e->params()[0], QLocale().toString(loginTime, QLocale().dateTimeFormat())));
+	    .arg(e->params()[0], loginTime.toString("yyyy-MM-dd hh:mm:ss UTC")));
     }
-    QDateTime idlingSince = e->timestamp().toLocalTime().addSecs(-idleSecs);
+    QDateTime idlingSince = e->timestamp().toLocalTime().addSecs(-idleSecs).toUTC();
     displayMsg(e, Message::Server, tr("[Whois] %1 is idling for %2 (since %3)")
         .arg(e->params()[0], secondsToString(idleSecs),
-	     QLocale().toString(idlingSince, QLocale().dateTimeFormat())));
+	     idlingSince.toString("yyyy-MM-dd hh:mm:ss UTC")));
 }
 
 
@@ -566,9 +571,9 @@ void EventStringifier::processIrcEvent329(IrcEvent *e)
         qWarning() << Q_FUNC_INFO << "received invalid timestamp:" << e->params()[1];
         return;
     }
-    QDateTime time = QDateTime::fromTime_t(unixtime);
+    QDateTime time = QDateTime::fromTime_t(unixtime).toUTC();
     displayMsg(e, Message::Topic, tr("Channel %1 created on %2")
-        .arg(channel, QLocale().toString(time, QLocale().dateTimeFormat())),
+        .arg(channel, time.toString("yyyy-MM-dd hh:mm:ss UTC")),
 	QString(), channel);
 }
 
@@ -612,10 +617,10 @@ void EventStringifier::processIrcEvent333(IrcEvent *e)
         return;
 
     QString channel = e->params().first();
-    QDateTime topicSetTime = QDateTime::fromTime_t(e->params()[2].toInt());
+    QDateTime topicSetTime = QDateTime::fromTime_t(e->params()[2].toInt()).toUTC();
     displayMsg(e, Message::Topic, tr("Topic set by %1 on %2")
         .arg(e->params()[1],
-	     QLocale().toString(topicSetTime, QLocale().dateTimeFormat()), QString(), channel));
+	     topicSetTime.toString("yyyy-MM-dd hh:mm:ss UTC")), QString(), channel);
 }
 
 
@@ -728,7 +733,7 @@ void EventStringifier::handleCtcpPing(CtcpEvent *e)
     if (e->ctcpType() == CtcpEvent::Query)
         defaultHandler(e->ctcpCmd(), e);
     else {
-        displayMsg(e, Message::Server, tr("Received CTCP-PING answer from %1 with %2 seconds round trip time")
-            .arg(nickFromMask(e->prefix())).arg(QDateTime::fromTime_t(e->param().toInt()).secsTo(e->timestamp())));
+        displayMsg(e, Message::Server, tr("Received CTCP-PING answer from %1 with %2 milliseconds round trip time")
+            .arg(nickFromMask(e->prefix())).arg(QDateTime::fromMSecsSinceEpoch(e->param().toULongLong()).msecsTo(e->timestamp())));
     }
 }

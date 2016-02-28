@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -19,11 +19,11 @@
  ***************************************************************************/
 
 #include <QDialogButtonBox>
+#include <QIcon>
 #include <QVBoxLayout>
 
 #include "coreconnectdlg.h"
 
-#include "iconloader.h"
 #include "clientsettings.h"
 #include "coreaccountsettingspage.h"
 
@@ -39,7 +39,7 @@ CoreConnectDlg::CoreConnectDlg(QWidget *parent) : QDialog(parent)
         _settingsPage->setSelectedAccount(lastAccount);
 
     setWindowTitle(tr("Connect to Core"));
-    setWindowIcon(SmallIcon("network-disconnect"));
+    setWindowIcon(QIcon::fromTheme("network-disconnect"));
 
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->addWidget(_settingsPage);

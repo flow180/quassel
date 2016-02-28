@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -126,7 +126,7 @@ int EventManager::findEventType(const QString &methodSignature_, const QString &
         int num = methodSignature.right(3).toUInt();
         if (num > 0) {
             QString numericSig = methodSignature.left(methodSignature.length() - 3) + "Numeric";
-            eventType = eventEnum().keyToValue(numericSig.toAscii());
+            eventType = eventEnum().keyToValue(numericSig.toLatin1());
             if (eventType < 0) {
                 qWarning() << Q_FUNC_INFO << "Could not find EventType" << numericSig << "for handling" << methodSignature;
                 return -1;
@@ -136,7 +136,7 @@ int EventManager::findEventType(const QString &methodSignature_, const QString &
     }
 
     if (eventType < 0)
-        eventType = eventEnum().keyToValue(methodSignature.toAscii());
+        eventType = eventEnum().keyToValue(methodSignature.toLatin1());
     if (eventType < 0) {
         qWarning() << Q_FUNC_INFO << "Could not find EventType" << methodSignature;
         return -1;
@@ -148,7 +148,11 @@ int EventManager::findEventType(const QString &methodSignature_, const QString &
 void EventManager::registerObject(QObject *object, Priority priority, const QString &methodPrefix, const QString &filterPrefix)
 {
     for (int i = object->metaObject()->methodOffset(); i < object->metaObject()->methodCount(); i++) {
-        QString methodSignature(object->metaObject()->method(i).signature());
+#if QT_VERSION >= 0x050000
+        QString methodSignature = object->metaObject()->method(i).methodSignature();
+#else
+        QString methodSignature = object->metaObject()->method(i).signature();
+#endif
 
         int eventType = findEventType(methodSignature, methodPrefix);
         if (eventType > 0) {

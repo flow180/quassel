@@ -13,8 +13,183 @@ changes, the git history at <http://git.quassel-irc.org> is your friend.
 
 Without further ado, let's start:
 
+Version 0.12.3 (2016-02-09)
+===========================
+
+* Fix activity filters when selecting buffers in custom ChatViews
+* Fix default shortcuts when integrated with KDE Frameworks
+* Introduce support for Appveyor CI (automated Windows builds)
+* Support SnoreNotify 0.7
+* Various cleanups and performance improvements
+* Various build system fixes
+* Channel keys are again remembered between syncs
+* Support for Qt 5.5
+* Network (re)connection fixes
+* Fix possible message loss when running multiple core users on a psql database
+* Command line option for specifying SSL certificates and keys
+* Many smaller fixes
+
+Version 0.12.2 (2015-04-23)
+===========================
+
+* Fix PostgreSQL not re-initializing after reconnect (raising CVE-2013-4422 from the dead)
+* Remove warning on startup due to a change in Kdelibs4ConfigMigrator
+
+Version 0.12.1 (2015-04-21)
+===========================
+
+* Emergency fix for behavior change in Qt5's psql driver regarding timezones
+
+Version 0.12.0 (2015-04-15)
+===========================
+
+* Full support for KDE Frameworks
+* Properly split messages with multi-byte encodings and/or encryption
+* Improve core password hashing algorithm
+  NOTE: This upgrades the database schema, so no downgrades are possible!
+* Remote password change
+* Core connection improvements
+* Build system improvements
+* PostgreSQL connection improvements
+* Improve Qt5 support
+* Qt 4.8+ or Qt 5.2+ now required
+* Several tweaks and fixes
+* Translation updates
+
+Version 0.11.0 (2014-09-23)
+===========================
+
+* New build requirements:
+  - C++11 capable compiler (gcc 4.7+, clang 3.3+, MSVC 2013+)
+  - cmake 2.8.9+
+* Full support for Qt 5.2+ in addition to Qt 4.6+
+* Completely revamp the build system, making use of "new" CMake features
+
+Version 0.10.1 (2014-09-23)
+===========================
+
+* Fix buffer hotlist sorting
+* Split CTCP messages if they're too long
+* Make database problems more obvious
+* Fix backlog loading for QuasselDroid
+* Properly save the toolbar state on Mac OSX
+* Fix a crash with KDE's network detection
+* Various other fixes
+
+Version 0.10.0 (2014-03-25)
+===========================
+
+* Refactor lots of the protocol and connection code
+* Introduce connection probing for reliably negotiating protocol features
+* Introduce the new DataStream protocol with streaming compression
+* Option for forcing the core to only accept SSL connections
+* Support for the Snore notification backend
+* Allow searching the web for selected text
+* Connection-related fixes
+* Allow for hiding inactive networks
+* Enable line wrap in the input field
+* Show backlog messages in the Chat Monitor
+* Remove SSL protocol selection, always use auto-negotiation for best results
+* Highlight rules are now case-insensitive by default
+* New and updated translations
+* Bump inxi version (for /sysinfo)
+* Use the raster rendering engine by default on OSX (should improve performance)
+
+Version 0.9.3 (2014-03-25)
+==========================
+
+* Notification fixes
+* Improve reliability of SSL connections
+* Save toolbar state properly on Mac
+* Prevent user interaction with the web preview
+* Fix fullscreen mode
+* Fix spurious crash caused by shaky ircd connections
+* Fix adding an unneeded colon to custom commands
+* Avoid Qt's DNS cache to properly handle round-robin DNS records
+
+Version 0.9.2 (2013-11-26)
+==========================
+
+* Don't crash if /topic contains newlines
+* Fix SSL-related issues
+* Fix Phonon notifications not playing sound
+* Pingout if connection drops during SASL auth phase
+* Prevent messages from being sent to status buffers
+* Make sure manipulated/buggy clients cannot access backlog of other core users
+* Fix context menu issues
+
+Version 0.9.1 (2013-10-11)
+==========================
+
+* Fix security issue with Qt 4.8.5 and PostgreSQL
+* Phonon notifications for Mac OS X
+* Convert tabs in messages into 8 spaces
+* Silence superfluous QCA warnings
+* Various key- and encryption-related fixes
+* Ignore formatting in clickables
+* Enable warnings when compiling with Clang
+* Updated translations
+* Various other small fixes and improvements
+
+Version 0.9.0 (2013-04-16)
+==========================
+
+* Halfop support
+* Channel-specific highlights
+* Support for intermediate CA certificates
+* Support the DockManager interface
+* OSX Notification Center support
+* DH1080 key exchange
+* SASL EXTERNAL support
+* Improvements for Retina displays on OSX
+* Supporting to start minimized to tray
+* Rudimentary support for Qt5 (obsolete again because upstream changed too much)
+* Refactor of SignalProxy, network and protocol code
+* First pieces of the coming protocol abstraction
+* Build system improvements
+* Various bugfixes
+* New and updated translations
+* Reformatted ALL the source code
+
+Version 0.8.0 (2012-03-20)
+==========================
+
+* Make tab completion key configurable
+* Syslog support for the core
+* Make the core more robust against random invalid input
+* oidentd support
+* Build system improvements
+* Many new and updated translations
+* Various bugfixes
+
+Version 0.7.4 (2012-03-20)
+--------------------------
+
+* Improve keyboard navigation
+* Bump Oxygen icons
+* Conform with icon naming spec
+* Remove JS support from webpreview
+* Fix support for Qt 4.8
+* Several bugfixes and cleanups
+
+Version 0.7.3 (2011-09-08)
+--------------------------
+
+* Fix a core crash
+
+Version 0.7.2 (2011-03-24)
+--------------------------
+
+* PostgreSQL improvements
+* Various bugfixes
+
+Version 0.7.1 (2010-09-21)
+--------------------------
+
+* Critical fixes for CTCP and connection handshake
+
 Version 0.7.0 (2010-09-14)
-================================
+==========================
 
 * Improved DE integration, support for dbusmenu
 * Bump Qt dependency: we need Qt 4.6 for client and monolithic now
@@ -34,7 +209,7 @@ Version 0.7.0 (2010-09-14)
 * Many bugfixes
 
 Version 0.6.1 (2010-04-16)
-==========================
+--------------------------
 
 * Critical bugfixes
 
@@ -76,13 +251,13 @@ Version 0.6.0 (2010-04-14)
 * Use gettext for translations
 
 Version 0.5.2 (2010-01-18)
-==========================
+--------------------------
 
 * CTCP ignore
 * Buildsystem fixes
 
 Version 0.5.1 (2009-11-21)
-==========================
+--------------------------
 
 * Many Bugfixes
 * Updated translations
@@ -125,19 +300,19 @@ Version 0.5.0 (2009-10-14)
 * Smart nickname completion (most recently active)
 
 Version 0.4.3 (2009-08-26)
-==========================
+--------------------------
 
-Bugfixes and translation updates
+* Bugfixes and translation updates
 
 Version 0.4.2 (2009-05-20)
-==========================
+--------------------------
 
-Bugfixes and translation updates
+* Bugfixes and translation updates
 
 Version 0.4.1 (2009-03-18)
-==========================
+--------------------------
 
-Bugfixes and translation updates
+* Bugfixes and translation updates
 
 Version 0.4.0 (2009-02-17)
 ==========================
@@ -178,7 +353,7 @@ Version 0.4.0 (2009-02-17)
   - Drag'n'Drop
 
 Version 0.3.1 (2008-11-20)
-==========================
+--------------------------
 
 * Nick changes and day change messages can now be hidden
 * Web previews and status icons can be disabled

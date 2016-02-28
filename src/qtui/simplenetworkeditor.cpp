@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,7 +20,7 @@
 
 #include "simplenetworkeditor.h"
 
-#include "iconloader.h"
+#include <QIcon>
 
 #include "networkssettingspage.h"
 
@@ -29,11 +29,11 @@ SimpleNetworkEditor::SimpleNetworkEditor(QWidget *parent)
 {
     ui.setupUi(this);
 
-    ui.addServer->setIcon(SmallIcon("list-add"));
-    ui.deleteServer->setIcon(SmallIcon("edit-delete"));
-    ui.editServer->setIcon(SmallIcon("configure"));
-    ui.upServer->setIcon(SmallIcon("go-up"));
-    ui.downServer->setIcon(SmallIcon("go-down"));
+    ui.addServer->setIcon(QIcon::fromTheme("list-add"));
+    ui.deleteServer->setIcon(QIcon::fromTheme("edit-delete"));
+    ui.editServer->setIcon(QIcon::fromTheme("configure"));
+    ui.upServer->setIcon(QIcon::fromTheme("go-up"));
+    ui.downServer->setIcon(QIcon::fromTheme("go-down"));
 
     connect(ui.networkNameEdit, SIGNAL(textEdited(const QString &)), this, SIGNAL(widgetHasChanged()));
     connect(ui.channelList, SIGNAL(textChanged()), this, SIGNAL(widgetHasChanged()));
@@ -65,7 +65,7 @@ void SimpleNetworkEditor::displayNetworkInfo(const NetworkInfo &networkInfo)
     foreach(Network::Server server, _networkInfo.serverList) {
         QListWidgetItem *item = new QListWidgetItem(QString("%1:%2").arg(server.host).arg(server.port));
         if (server.useSsl)
-            item->setIcon(SmallIcon("document-encrypt"));
+            item->setIcon(QIcon::fromTheme("document-encrypt"));
         ui.serverList->addItem(item);
     }
 

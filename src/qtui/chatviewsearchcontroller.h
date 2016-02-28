@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,7 +21,7 @@
 #ifndef CHATVIEWSEARCHCONTROLLER_H
 #define CHATVIEWSEARCHCONTROLLER_H
 
-#include <QObject>
+#include <QGraphicsItem>
 #include <QHash>
 #include <QPointer>
 #include <QString>
@@ -87,11 +87,11 @@ private:
 
 
 // Highlight Items
-#include <QGraphicsItem>
-
 class SearchHighlightItem : public QObject, public QGraphicsItem
 {
     Q_OBJECT
+
+// Apparently, there are broken Qt 4.8.2 mocs around that will fail without this (otherwise useless) #if... looking at you, Wheezy!
 #if QT_VERSION >= 0x040600
     Q_INTERFACES(QGraphicsItem)
 #endif

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -45,6 +45,7 @@ public slots:
     virtual inline void requestSetAutoWhoInterval(int interval) { setAutoWhoInterval(interval); }
     virtual inline void requestSetAutoWhoNickLimit(int nickLimit) { setAutoWhoNickLimit(nickLimit); }
     virtual inline void requestSetAutoWhoDelay(int delay) { setAutoWhoDelay(delay); }
+    virtual inline void requestSetStandardCtcp(bool enabled) { setStandardCtcp(enabled); }
 };
 
 

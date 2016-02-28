@@ -1,12 +1,11 @@
 # Builds the core module
 
-setup_qt_variables(Network Sql Script)
-
 set(SOURCES
     abstractsqlstorage.cpp
     core.cpp
     corealiasmanager.cpp
     coreapplication.cpp
+    coreauthhandler.cpp
     corebacklogmanager.cpp
     corebasichandler.cpp
     corebuffersyncer.cpp
@@ -23,6 +22,8 @@ set(SOURCES
     coresession.cpp
     coresessioneventprocessor.cpp
     coresettings.cpp
+    coretransfer.cpp
+    coretransfermanager.cpp
     coreuserinputhandler.cpp
     coreusersettings.cpp
     ctcpparser.cpp
@@ -33,55 +34,18 @@ set(SOURCES
     postgresqlstorage.cpp
     sessionthread.cpp
     sqlitestorage.cpp
-    storage.cpp)
+    storage.cpp
 
-set(MOC_HDRS
-    abstractsqlstorage.h
-    core.h
-    corealiasmanager.h
-    coreapplication.h
-    corebacklogmanager.h
-    corebasichandler.h
-    corebuffersyncer.h
-    corebufferviewconfig.h
-    corebufferviewmanager.h
-    corecoreinfo.h
+    # needed for automoc
     coreeventmanager.h
-    coreidentity.h
-    coreignorelistmanager.h
-    coreircchannel.h
-    coreirclisthelper.h
-    coreircuser.h
-    corenetwork.h
-    corenetworkconfig.h
-    coresession.h
-    coresessioneventprocessor.h
-    coreuserinputhandler.h
-    ctcpparser.h
-    eventstringifier.h
-    ircparser.h
-    netsplit.h
-    oidentdconfiggenerator.h
-    postgresqlstorage.h
-    sqlitestorage.h
-    storage.h
-    sessionthread.h)
+)
 
-set(HEADERS
-    coresettings.h
-    coreusersettings.h)
+set(LIBS )
 
 if(HAVE_SSL)
   set(SOURCES ${SOURCES} sslserver.cpp)
-  set(MOC_HDRS ${MOC_HDRS} sslserver.h)
   include_directories(${OPENSSL_INCLUDE_DIR})
 endif(HAVE_SSL)
-
-if(HAVE_QCA2)
-  set(SOURCES ${SOURCES} cipher.cpp)
-  set(HEADERS ${HEADERS} cipher.h)
-  include_directories(${QCA2_INCLUDE_DIR})
-endif(HAVE_QCA2)
 
 if(HAVE_LDAP)
   set(SOURCES ${SOURCES} ldapstorage.cpp sqliteldapstorage.cpp postgresqlldapstorage.cpp)
@@ -91,20 +55,23 @@ endif(HAVE_LDAP)
 
 include_directories(${CMAKE_SOURCE_DIR}/src/common ${QUASSEL_QT_INCLUDES})
 
-if(NOT WITH_QT5)
-  qt4_wrap_cpp(MOC ${MOC_HDRS})
-endif(NOT WITH_QT5)
+if (QCA2-QT5_FOUND)
+    add_definitions(-DHAVE_QCA2)
+    include_directories(${QCA2-QT5_INCLUDE_DIR})
+    list(APPEND SOURCES cipher.cpp)
+    list(APPEND LIBS ${QCA2-QT5_LIBRARIES})
+endif()
 
-set(CORE_RCS ${CORE_RCS} core/sql.qrc PARENT_SCOPE)
+include_directories(${CMAKE_SOURCE_DIR}/src/common)
 
-add_library(mod_core STATIC ${SOURCES} ${MOC} ${HEADERS})
-add_dependencies(mod_core mod_common)
-set_target_properties(mod_core PROPERTIES COMPILE_FLAGS "${QUASSEL_QT_COMPILEFLAGS}")
+set(CORE_RCS ${CORE_RCS} ${CMAKE_CURRENT_SOURCE_DIR}/sql.qrc)
+qt_add_resources(SOURCES ${CORE_RCS})
 
-if(HAVE_QCA2)
-  target_link_libraries(mod_core ${QCA2_LIBRARIES})
-endif(HAVE_QCA2)
+add_library(mod_core STATIC ${SOURCES})
+qt_use_modules(mod_core Core Network Script Sql)
 
 if(HAVE_LDAP)
   target_link_libraries(mod_core ${LDAP_LIBRARIES})
 endif(HAVE_LDAP)
+
+target_link_libraries(mod_core mod_common ${LIBS})

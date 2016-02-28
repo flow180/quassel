@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -18,6 +18,7 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.         *
  ***************************************************************************/
 
+#include <QIcon>
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
@@ -27,7 +28,6 @@
 
 #include "buffermodel.h"
 #include "buffersettings.h"
-#include "iconloader.h"
 #include "clientidentity.h"
 #include "network.h"
 #include "util.h"
@@ -36,14 +36,15 @@
 
 ContextMenuActionProvider::ContextMenuActionProvider(QObject *parent) : NetworkModelController(parent)
 {
-    registerAction(NetworkConnect, SmallIcon("network-connect"), tr("Connect"));
-    registerAction(NetworkDisconnect, SmallIcon("network-disconnect"), tr("Disconnect"));
+    registerAction(NetworkConnect, QIcon::fromTheme("network-connect"), tr("Connect"));
+    registerAction(NetworkDisconnect, QIcon::fromTheme("network-disconnect"), tr("Disconnect"));
 
-    registerAction(BufferJoin, SmallIcon("irc-join-channel"), tr("Join"));
-    registerAction(BufferPart, SmallIcon("irc-close-channel"), tr("Part"));
+    registerAction(BufferJoin, QIcon::fromTheme("irc-join-channel"), tr("Join"));
+    registerAction(BufferPart, QIcon::fromTheme("irc-close-channel"), tr("Part"));
     registerAction(BufferRemove, tr("Delete Chat(s)..."));
     registerAction(BufferSwitchTo, tr("Go to Chat"));
 
+    registerAction(HideJoinPartQuit, tr("Joins/Parts/Quits"));
     registerAction(HideJoin, tr("Joins"), true);
     registerAction(HidePart, tr("Parts"), true);
     registerAction(HideQuit, tr("Quits"), true);
@@ -54,7 +55,7 @@ ContextMenuActionProvider::ContextMenuActionProvider(QObject *parent) : NetworkM
     registerAction(HideApplyToAll, tr("Set as Default..."));
     registerAction(HideUseDefaults, tr("Use Defaults..."));
 
-    registerAction(JoinChannel, SmallIcon("irc-join-channel"), tr("Join Channel..."));
+    registerAction(JoinChannel, QIcon::fromTheme("irc-join-channel"), tr("Join Channel..."));
 
     registerAction(NickQuery, tr("Start Query"));
     registerAction(NickSwitchTo, tr("Show Query"));
@@ -76,15 +77,15 @@ ContextMenuActionProvider::ContextMenuActionProvider(QObject *parent) : NetworkM
     registerAction(NickIgnoreToggleEnabled3, "Enable", true);
     registerAction(NickIgnoreToggleEnabled4, "Enable", true);
 
-    registerAction(NickOp, SmallIcon("irc-operator"), tr("Give Operator Status"));
-    registerAction(NickDeop, SmallIcon("irc-remove-operator"), tr("Take Operator Status"));
-    registerAction(NickHalfop, SmallIcon("irc-voice"), tr("Give Half-Operator Status"));
-    registerAction(NickDehalfop, SmallIcon("irc-unvoice"), tr("Take Half-Operator Status"));
-    registerAction(NickVoice, SmallIcon("irc-voice"), tr("Give Voice"));
-    registerAction(NickDevoice, SmallIcon("irc-unvoice"), tr("Take Voice"));
-    registerAction(NickKick, SmallIcon("im-kick-user"), tr("Kick From Channel"));
-    registerAction(NickBan, SmallIcon("im-ban-user"), tr("Ban From Channel"));
-    registerAction(NickKickBan, SmallIcon("im-ban-kick-user"), tr("Kick && Ban"));
+    registerAction(NickOp, QIcon::fromTheme("irc-operator"), tr("Give Operator Status"));
+    registerAction(NickDeop, QIcon::fromTheme("irc-remove-operator"), tr("Take Operator Status"));
+    registerAction(NickHalfop, QIcon::fromTheme("irc-voice"), tr("Give Half-Operator Status"));
+    registerAction(NickDehalfop, QIcon::fromTheme("irc-unvoice"), tr("Take Half-Operator Status"));
+    registerAction(NickVoice, QIcon::fromTheme("irc-voice"), tr("Give Voice"));
+    registerAction(NickDevoice, QIcon::fromTheme("irc-unvoice"), tr("Take Voice"));
+    registerAction(NickKick, QIcon::fromTheme("im-kick-user"), tr("Kick From Channel"));
+    registerAction(NickBan, QIcon::fromTheme("im-ban-user"), tr("Ban From Channel"));
+    registerAction(NickKickBan, QIcon::fromTheme("im-ban-kick-user"), tr("Kick && Ban"));
 
     registerAction(HideBufferTemporarily, tr("Hide Chat(s) Temporarily"));
     registerAction(HideBufferPermanently, tr("Hide Chat(s) Permanently"));
@@ -92,6 +93,8 @@ ContextMenuActionProvider::ContextMenuActionProvider(QObject *parent) : NetworkM
     registerAction(ShowIgnoreList, tr("Show Ignore List"));
 
     QMenu *hideEventsMenu = new QMenu();
+    hideEventsMenu->addAction(action(HideJoinPartQuit));
+    hideEventsMenu->addSeparator();
     hideEventsMenu->addAction(action(HideJoin));
     hideEventsMenu->addAction(action(HidePart));
     hideEventsMenu->addAction(action(HideQuit));
@@ -511,7 +514,7 @@ void ContextMenuActionProvider::addIgnoreMenu(QMenu *menu, const QString &hostma
                 ignoreMenu->addAction(act);
             }
             counter++;
-            ruleIter++;
+            ++ruleIter;
         }
         if (counter)
             ignoreMenu->addSeparator();

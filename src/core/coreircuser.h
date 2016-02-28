@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -40,7 +40,6 @@ public:
 
 #ifdef HAVE_QCA2
     Cipher *cipher() const;
-    void setEncrypted(bool);
 #endif
 
 #ifdef HAVE_QCA2

@@ -1,11 +1,11 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) version 3.                                           *
+ *   This file is free software; you can redistribute it and/or modify     *
+ *   it under the terms of the GNU Library General Public License (LGPL)   *
+ *   as published by the Free Software Foundation; either version 2 of the *
+ *   License, or (at your option) any later version.                       *
  *                                                                         *
  *   This program is distributed in the hope that it will be useful,       *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
@@ -26,10 +26,9 @@
 #include "action.h"
 #include "actioncollection.h"
 #include "client.h"
-#include "iconloader.h"
 #include "qtui.h"
 
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
 #  include <KMenu>
 #  include <KWindowInfo>
 #  include <KWindowSystem>
@@ -40,9 +39,9 @@ SystemTray::SystemTray(QWidget *parent)
     _mode(Invalid),
     _state(Passive),
     _shouldBeVisible(true),
-    _passiveIcon(DesktopIcon("quassel-inactive")),
-    _activeIcon(DesktopIcon("quassel")),
-    _needsAttentionIcon(DesktopIcon("quassel-message")),
+    _passiveIcon(QIcon::fromTheme("quassel-inactive", QIcon(":/icons/quassel-inactive.png"))),
+    _activeIcon(QIcon::fromTheme("quassel", QIcon(":/icons/quassel.png"))),
+    _needsAttentionIcon(QIcon::fromTheme("quassel-message", QIcon(":/icons/quassel-message.png"))),
     _trayMenu(0),
     _associatedWidget(parent)
 {
@@ -67,7 +66,7 @@ void SystemTray::init()
     ActionCollection *coll = QtUi::actionCollection("General");
     _minimizeRestoreAction = new Action(tr("&Minimize"), this, this, SLOT(minimizeRestore()));
 
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
     KMenu *kmenu;
     _trayMenu = kmenu = new KMenu();
     kmenu->addTitle(_activeIcon, "Quassel IRC");
@@ -77,7 +76,7 @@ void SystemTray::init()
 
     _trayMenu->setTitle("Quassel IRC");
 
-#ifndef HAVE_KDE
+#ifndef HAVE_KDE4
     _trayMenu->setAttribute(Qt::WA_Hover);
 #endif
 
@@ -108,7 +107,7 @@ void SystemTray::setMode(Mode mode_)
 {
     if (mode_ != _mode) {
         _mode = mode_;
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
         if (_trayMenu) {
             if (_mode == Legacy) {
                 _trayMenu->setWindowFlags(Qt::Popup);
@@ -122,13 +121,13 @@ void SystemTray::setMode(Mode mode_)
 }
 
 
-Icon SystemTray::stateIcon() const
+QIcon SystemTray::stateIcon() const
 {
     return stateIcon(state());
 }
 
 
-Icon SystemTray::stateIcon(State state) const
+QIcon SystemTray::stateIcon(State state) const
 {
     switch (state) {
     case Passive:
@@ -138,7 +137,7 @@ Icon SystemTray::stateIcon(State state) const
     case NeedsAttention:
         return _needsAttentionIcon;
     }
-    return Icon();
+    return QIcon();
 }
 
 

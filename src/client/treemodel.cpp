@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -105,7 +105,7 @@ void AbstractTreeItem::removeAllChilds()
         child = *childIter;
         child->setTreeItemFlags(0); // disable self deletion, as this would only fuck up consitency and the child gets deleted anyways
         child->removeAllChilds();
-        childIter++;
+        ++childIter;
     }
 
     emit beginRemoveChilds(0, numChilds - 1);
@@ -220,7 +220,7 @@ void AbstractTreeItem::dumpChildList()
         while (childIter != _childItems.constEnd()) {
             child = *childIter;
             qDebug() << "Row:" << child->row() << child << child->data(0, Qt::DisplayRole);
-            childIter++;
+            ++childIter;
         }
     }
     qDebug() << "==== End Of Childlist ====";
@@ -304,7 +304,7 @@ QVariant PropertyMapItem::data(int column, int role) const
         return toolTip(column);
     case Qt::DisplayRole:
     case TreeModel::SortRole: // fallthrough, since SortRole should default to DisplayRole
-        return property(_propertyOrder[column].toAscii());
+        return property(_propertyOrder[column].toLatin1());
     default:
         return QVariant();
     }
@@ -317,7 +317,7 @@ bool PropertyMapItem::setData(int column, const QVariant &value, int role)
         return false;
 
     emit dataChanged(column);
-    return setProperty(_propertyOrder[column].toAscii(), value);
+    return setProperty(_propertyOrder[column].toLatin1(), value);
 }
 
 
@@ -554,10 +554,11 @@ void TreeModel::endAppendChilds()
     }
     Q_ASSERT(_aboutToRemoveOrInsert);
     ChildStatus cs = _childStatus;
+#ifndef QT_NO_DEBUG
     QModelIndex parent = indexByItem(parentItem);
     Q_ASSERT(cs.parent == parent);
     Q_ASSERT(rowCount(parent) == cs.childCount + cs.end - cs.start + 1);
-
+#endif
     _aboutToRemoveOrInsert = false;
     for (int i = cs.start; i <= cs.end; i++) {
         connectItem(parentItem->child(i));
@@ -600,10 +601,12 @@ void TreeModel::endRemoveChilds()
 
     // concistency checks
     Q_ASSERT(_aboutToRemoveOrInsert);
+#ifndef QT_NO_DEBUG
     ChildStatus cs = _childStatus;
     QModelIndex parent = indexByItem(parentItem);
     Q_ASSERT(cs.parent == parent);
     Q_ASSERT(rowCount(parent) == cs.childCount - cs.end + cs.start - 1);
+#endif
     _aboutToRemoveOrInsert = false;
 
     endRemoveRows();

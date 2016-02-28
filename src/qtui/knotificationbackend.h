@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -18,8 +18,7 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.         *
  ***************************************************************************/
 
-#ifndef KNOTIFICATIONBACKEND_H_
-#define KNOTIFICATIONBACKEND_H_
+#pragma once
 
 #include <QPointer>
 
@@ -52,7 +51,7 @@ private:
     void removeNotificationById(uint id);
     void updateToolTip();
 
-    QList<QPair<uint, QPointer<KNotification> > > _notifications;
+    QList<QPair<uint, QPointer<KNotification>>> _notifications;
 };
 
 
@@ -72,6 +71,3 @@ private slots:
 private:
     KNotifyConfigWidget *_widget;
 };
-
-
-#endif

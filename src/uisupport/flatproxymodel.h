@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -60,7 +60,7 @@ private slots:
     void on_layoutAboutToBeChanged();
     void on_layoutChanged();
 
-    inline void on_modelAboutToBeReset() { reset(); }
+    inline void on_modelAboutToBeReset() { beginResetModel(); endResetModel(); }
     // void on_modelReset();
 
     void on_rowsAboutToBeInserted(const QModelIndex &parent, int start, int end);

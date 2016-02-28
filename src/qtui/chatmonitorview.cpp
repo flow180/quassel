@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,6 +21,7 @@
 #include "chatmonitorview.h"
 
 #include <QAction>
+#include <QIcon>
 #include <QMenu>
 #include <QContextMenuEvent>
 
@@ -29,7 +30,6 @@
 #include "chatitem.h"
 #include "chatscene.h"
 #include "client.h"
-#include "iconloader.h"
 #include "networkmodel.h"
 #include "buffermodel.h"
 #include "messagemodel.h"
@@ -70,7 +70,7 @@ void ChatMonitorView::addActionsToMenu(QMenu *menu, const QPointF &pos)
     }
 
     menu->addSeparator();
-    menu->addAction(SmallIcon("configure"), tr("Configure..."), this, SLOT(showSettingsPage()));
+    menu->addAction(QIcon::fromTheme("configure"), tr("Configure..."), this, SLOT(showSettingsPage()));
 }
 
 

@@ -1,23 +1,21 @@
 # Builds the common module
 
-setup_qt_variables(Core Network)
-
 set(SOURCES
     aliasmanager.cpp
+    authhandler.cpp
     backlogmanager.cpp
     basichandler.cpp
     bufferinfo.cpp
     buffersyncer.cpp
     bufferviewconfig.cpp
     bufferviewmanager.cpp
-    cliparser.cpp
-    coreinfo.cpp
+    compressor.cpp
     ctcpevent.cpp
     event.cpp
     eventmanager.cpp
     identity.cpp
     ignorelistmanager.cpp
-    internalconnection.cpp
+    internalpeer.cpp
     ircchannel.cpp
     ircevent.cpp
     irclisthelper.cpp
@@ -28,81 +26,79 @@ set(SOURCES
     network.cpp
     networkconfig.cpp
     networkevent.cpp
+    peer.cpp
+    peerfactory.cpp
+    presetnetworks.cpp
     quassel.cpp
-    remoteconnection.cpp
+    remotepeer.cpp
     settings.cpp
     signalproxy.cpp
     syncableobject.cpp
+    transfer.cpp
+    transfermanager.cpp
     util.cpp
 
-    protocols/legacy/legacyconnection.cpp
-)
+    protocols/datastream/datastreampeer.cpp
+    protocols/legacy/legacypeer.cpp
 
-set(MOC_HDRS
-    aliasmanager.h
-    backlogmanager.h
-    basichandler.h
-    buffersyncer.h
-    bufferviewconfig.h
-    bufferviewmanager.h
+    # needed for automoc
     coreinfo.h
-    eventmanager.h
-    identity.h
-    ignorelistmanager.h
-    internalconnection.h
-    ircchannel.h
-    irclisthelper.h
-    ircuser.h
-    network.h
-    networkconfig.h
-    remoteconnection.h
-    settings.h
-    signalproxy.h
-    syncableobject.h
-
-    protocols/legacy/legacyconnection.h
 )
 
-set(HEADERS ${MOC_HDRS}
-    abstractcliparser.h
-    bufferinfo.h
-    cliparser.h
-    ctcpevent.h
-    event.h
-    ircevent.h
-    messageevent.h
-    networkevent.h
-    logger.h
-    message.h
-    protocol.h
-    types.h
-    util.h)
+if (USE_QT5)
+    list(APPEND SOURCES qt5cliparser.cpp)
+else()
+    list(APPEND SOURCES cliparser.cpp)
+endif()
 
-if(APPLE)
-  set(SOURCES ${SOURCES} mac_utils.cpp)
-  set(HEADERS ${HEADERS} mac_utils.h)
+if (QCA2_FOUND OR QCA2-QT5_FOUND)
+    set(SOURCES ${SOURCES} keyevent.cpp)
+endif()
+
+if (ZLIB_FOUND)
+    add_definitions(-DHAVE_ZLIB)
+    include_directories(${ZLIB_INCLUDE_DIRS})
+else()
+    set(SOURCES ${SOURCES} ../../3rdparty/miniz/miniz.c)
+endif()
+
+if (USE_QT4)
+    set(SOURCES ${SOURCES} ../../3rdparty/sha512/sha512.c)
+endif()
+
+if (HAVE_SYSLOG)
+    add_definitions(-DHAVE_SYSLOG)
+endif()
+
+if (APPLE)
+    set(SOURCES ${SOURCES} mac_utils.cpp)
 endif(APPLE)
 
-if(CMAKE_HOST_WIN32)
+if (WIN32)
     set(SOURCES ${SOURCES} logbacktrace_win.cpp)
-endif(CMAKE_HOST_WIN32)
-if(CMAKE_HOST_UNIX)
+else()
+    if (EXECINFO_FOUND)
+        add_definitions(-DHAVE_EXECINFO)
+        include_directories(${EXECINFO_INCLUDES})
+    endif()
     set(SOURCES ${SOURCES} logbacktrace_unix.cpp)
-endif(CMAKE_HOST_UNIX)
+endif()
 
-include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR} ${QUASSEL_QT_INCLUDES})  # for version.inc and version.gen
+qt_add_resources(SOURCES ${COMMON_RCS})
 
-if(NOT WITH_QT5)
-  qt4_wrap_cpp(MOC ${MOC_HDRS})
-endif(NOT WITH_QT5)
+add_library(mod_common STATIC ${SOURCES})
+qt_use_modules(mod_common Core Network)
 
-set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES version.gen)
-
-add_library(mod_common STATIC ${SOURCES} ${HEADERS} ${MOC})
-set_target_properties(mod_common PROPERTIES COMPILE_FLAGS "${QUASSEL_QT_COMPILEFLAGS}")
-
-if(APPLE)
-  target_link_libraries(mod_common "-framework CoreServices" "-framework CoreFoundation")
+if (APPLE)
+    target_link_libraries(mod_common "-framework CoreServices" "-framework CoreFoundation")
 endif(APPLE)
 
-target_link_libraries(mod_common ${CMAKE_DL_LIBS})
+target_link_libraries(mod_common ${CMAKE_DL_LIBS} ${EXECINFO_LIBRARIES})
+
+if(ZLIB_FOUND)
+    target_link_libraries(mod_common ${ZLIB_LIBRARIES})
+endif()
+
+# This is needed so translations are generated before trying to build the qrc.
+# Should probably find a nicer solution with proper dependencies between the involved files, though...
+add_dependencies(mod_common po)

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -28,6 +28,10 @@
 #include "quassel.h"
 
 class QMetaMethod;
+
+// MIBenum values from http://www.iana.org/assignments/character-sets/character-sets.xml#table-character-sets-1
+static QList<int> utf8DetectionBlacklist = QList<int>()
+    << 39 /* ISO-2022-JP */;
 
 QString nickFromMask(QString mask)
 {
@@ -90,6 +94,9 @@ QString stripAcceleratorMarkers(const QString &label_)
 
 QString decodeString(const QByteArray &input, QTextCodec *codec)
 {
+    if (codec && utf8DetectionBlacklist.contains(codec->mibEnum()))
+        return codec->toUnicode(input);
+
     // First, we check if it's utf8. It is very improbable to encounter a string that looks like
     // valid utf8, but in fact is not. This means that if the input string passes as valid utf8, it
     // is safe to assume that it is.
@@ -114,8 +121,8 @@ QString decodeString(const QByteArray &input, QTextCodec *codec)
         //qDebug() << "Detected utf8:" << s;
         return s;
     }
-    //QTextCodec *codec = QTextCodec::codecForName(encoding.toAscii());
-    if (!codec) return QString::fromAscii(input);
+    //QTextCodec *codec = QTextCodec::codecForName(encoding.toLatin1());
+    if (!codec) return QString::fromLatin1(input);
     return codec->toUnicode(input);
 }
 

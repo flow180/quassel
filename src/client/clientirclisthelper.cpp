@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -43,7 +43,7 @@ void ClientIrcListHelper::receiveChannelList(const NetworkId &netId, const QStri
         QVariantList channelVar = iter->toList();
         ChannelDescription channelDescription(channelVar[0].toString(), channelVar[1].toUInt(), channelVar[2].toString());
         channelList << channelDescription;
-        iter++;
+        ++iter;
     }
 
     emit channelListReceived(netId, channelFilters, channelList);

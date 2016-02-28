@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -38,7 +38,7 @@ ColumnHandleItem::ColumnHandleItem(qreal w, QGraphicsItem *parent)
     _opacity(0),
     _animation(new QPropertyAnimation(this, "opacity", this))
 {
-    setAcceptsHoverEvents(true);
+    setAcceptHoverEvents(true);
     setZValue(10);
     setCursor(QCursor(Qt::OpenHandCursor));
 
@@ -58,6 +58,7 @@ void ColumnHandleItem::setXPos(qreal xpos)
     QRectF sceneBRect = _boundingRect.translated(x(), 0);
     _sceneLeft = sceneBRect.left();
     _sceneRight = sceneBRect.right();
+    emit positionChanged(xpos);
 }
 
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -54,7 +54,7 @@ void Quassel::logBacktrace(const QString &filename)
         //       void *dli_saddr;           /* Exact value of nearest symbol.  */
         //     } Dl_info;
 
-    #if __LP64__
+    #ifdef __LP64__
         int addrSize = 16;
     #else
         int addrSize = 8;

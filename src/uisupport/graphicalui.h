@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -28,7 +28,7 @@ class ContextMenuActionProvider;
 class ToolBarActionProvider;
 class UiStyle;
 
-#ifdef Q_WS_WIN
+#ifdef Q_OS_WIN
 #  include <windows.h>
 #endif
 
@@ -116,7 +116,7 @@ private:
     static UiStyle *_uiStyle;
     static bool _onAllDesktops;
 
-#ifdef Q_WS_WIN
+#ifdef Q_OS_WIN
     DWORD _dwTickCount;
 #endif
 };

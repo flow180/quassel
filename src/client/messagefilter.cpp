@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -201,7 +201,7 @@ bool MessageFilter::filterAcceptsRow(int sourceRow, const QModelIndex &sourcePar
             while (idIter != _validBuffers.constEnd()) {
                 if (Client::networkModel()->bufferType(*idIter) == BufferInfo::StatusBuffer)
                     return true;
-                idIter++;
+                ++idIter;
             }
         }
 
@@ -241,6 +241,6 @@ void MessageFilter::requestBacklog()
     QSet<BufferId>::const_iterator bufferIdIter = _validBuffers.constBegin();
     while (bufferIdIter != _validBuffers.constEnd()) {
         Client::messageModel()->requestBacklog(*bufferIdIter);
-        bufferIdIter++;
+        ++bufferIdIter;
     }
 }

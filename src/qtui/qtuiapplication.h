@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,7 +21,7 @@
 #ifndef QTUIAPPLICATION_H_
 #define QTUIAPPLICATION_H_
 
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
 #  include <KApplication>
 #else
 #  include <QApplication>
@@ -34,7 +34,7 @@
 
 class QtUi;
 
-#ifdef HAVE_KDE
+#ifdef HAVE_KDE4
 class QtUiApplication : public KApplication, public Quassel
 {
 #else

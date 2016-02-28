@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -24,16 +24,16 @@
 #include "core.h"
 #include "qtui.h"
 
-class InternalConnection;
+class InternalPeer;
 
 MonolithicApplication::MonolithicApplication(int &argc, char **argv)
     : QtUiApplication(argc, argv),
     _internalInitDone(false)
 {
     _internal = new CoreApplicationInternal(); // needed for parser options
-#if defined(HAVE_KDE) || defined(Q_OS_MAC)
+#if defined(HAVE_KDE4) || defined(Q_OS_MAC)
     disableCrashhandler();
-#endif /* HAVE_KDE || Q_OS_MAC */
+#endif /* HAVE_KDE4 || Q_OS_MAC */
     setRunMode(Quassel::Monolithic);
 }
 
@@ -70,6 +70,6 @@ void MonolithicApplication::startInternalCore()
     }
     Core *core = Core::instance();
     CoreConnection *connection = Client::coreConnection();
-    connect(connection, SIGNAL(connectToInternalCore(InternalConnection*)), core, SLOT(setupInternalClientSession(InternalConnection*)));
-    connect(core, SIGNAL(sessionState(QVariant)), connection, SLOT(internalSessionStateReceived(QVariant)));
+    connect(connection, SIGNAL(connectToInternalCore(InternalPeer*)), core, SLOT(setupInternalClientSession(InternalPeer*)));
+    connect(core, SIGNAL(sessionState(Protocol::SessionState)), connection, SLOT(internalSessionStateReceived(Protocol::SessionState)));
 }

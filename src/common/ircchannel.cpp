@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -36,6 +36,7 @@ IrcChannel::IrcChannel(const QString &channelname, Network *network)
     _initialized(false),
     _name(channelname),
     _topic(QString()),
+    _encrypted(false),
     _network(network),
     _codecForEncoding(0),
     _codecForDecoding(0)
@@ -72,7 +73,7 @@ bool IrcChannel::isValidChannelUserMode(const QString &mode) const
 {
     bool isvalid = true;
     if (mode.size() > 1) {
-        qWarning() << "Channel" << name() << "received Channel User Mode which is longer then 1 Char:" << mode;
+        qWarning() << "Channel" << name() << "received Channel User Mode which is longer than 1 Char:" << mode;
         isvalid = false;
     }
     return isvalid;
@@ -96,7 +97,7 @@ QString IrcChannel::userModes(const QString &nick) const
 
 void IrcChannel::setCodecForEncoding(const QString &name)
 {
-    setCodecForEncoding(QTextCodec::codecForName(name.toAscii()));
+    setCodecForEncoding(QTextCodec::codecForName(name.toLatin1()));
 }
 
 
@@ -108,7 +109,7 @@ void IrcChannel::setCodecForEncoding(QTextCodec *codec)
 
 void IrcChannel::setCodecForDecoding(const QString &name)
 {
-    setCodecForDecoding(QTextCodec::codecForName(name.toAscii()));
+    setCodecForDecoding(QTextCodec::codecForName(name.toLatin1()));
 }
 
 
@@ -151,6 +152,13 @@ void IrcChannel::setPassword(const QString &password)
     SYNC(ARG(password))
 }
 
+void IrcChannel::setEncrypted(bool encrypted)
+{
+    _encrypted = encrypted;
+    SYNC(ARG(encrypted))
+    emit encryptedSet(encrypted);
+}
+
 
 void IrcChannel::joinIrcUsers(const QList<IrcUser *> &users, const QStringList &modes)
 {
@@ -175,12 +183,12 @@ void IrcChannel::joinIrcUsers(const QList<IrcUser *> &users, const QStringList &
         }
 
         _userModes[ircuser] = modes[i];
-        ircuser->joinChannel(this);
+        ircuser->joinChannel(this, true);
         connect(ircuser, SIGNAL(nickSet(QString)), this, SLOT(ircUserNickSet(QString)));
 
         // connect(ircuser, SIGNAL(destroyed()), this, SLOT(ircUserDestroyed()));
-        // if you wonder why there is no counterpart to ircUserJoined:
-        // the joines are propagted by the ircuser. the signal ircUserJoined is only for convenience
+        // If you wonder why there is no counterpart to ircUserJoined:
+        // the joins are propagated by the ircuser. The signal ircUserJoined is only for convenience
 
         newNicks << ircuser->nick();
         newModes << modes[i];
@@ -219,8 +227,8 @@ void IrcChannel::part(IrcUser *ircuser)
     if (isKnownUser(ircuser)) {
         _userModes.remove(ircuser);
         ircuser->partChannel(this);
-        // if you wonder why there is no counterpart to ircUserParted:
-        // the joines are propagted by the ircuser. the signal ircUserParted is only for convenience
+        // If you wonder why there is no counterpart to ircUserParted:
+        // the joins are propagted by the ircuser. The signal ircUserParted is only for convenience
         disconnect(ircuser, 0, this, 0);
         emit ircUserParted(ircuser);
 
@@ -313,7 +321,7 @@ QVariantMap IrcChannel::initUserModes() const
     QHash<IrcUser *, QString>::const_iterator iter = _userModes.constBegin();
     while (iter != _userModes.constEnd()) {
         usermodes[iter.key()->nick()] = iter.value();
-        iter++;
+        ++iter;
     }
     return usermodes;
 }
@@ -327,7 +335,7 @@ void IrcChannel::initSetUserModes(const QVariantMap &usermodes)
     while (iter != usermodes.constEnd()) {
         users << network()->newIrcUser(iter.key());
         modes << iter.value().toString();
-        iter++;
+        ++iter;
     }
     joinIrcUsers(users, modes);
 }
@@ -341,7 +349,7 @@ QVariantMap IrcChannel::initChanModes() const
     QHash<QChar, QStringList>::const_iterator A_iter = _A_channelModes.constBegin();
     while (A_iter != _A_channelModes.constEnd()) {
         A_modes[A_iter.key()] = A_iter.value();
-        A_iter++;
+        ++A_iter;
     }
     channelModes["A"] = A_modes;
 
@@ -349,7 +357,7 @@ QVariantMap IrcChannel::initChanModes() const
     QHash<QChar, QString>::const_iterator B_iter = _B_channelModes.constBegin();
     while (B_iter != _B_channelModes.constEnd()) {
         B_modes[B_iter.key()] = B_iter.value();
-        B_iter++;
+        ++B_iter;
     }
     channelModes["B"] = B_modes;
 
@@ -357,7 +365,7 @@ QVariantMap IrcChannel::initChanModes() const
     QHash<QChar, QString>::const_iterator C_iter = _C_channelModes.constBegin();
     while (C_iter != _C_channelModes.constEnd()) {
         C_modes[C_iter.key()] = C_iter.value();
-        C_iter++;
+        ++C_iter;
     }
     channelModes["C"] = C_modes;
 
@@ -365,7 +373,7 @@ QVariantMap IrcChannel::initChanModes() const
     QSet<QChar>::const_iterator D_iter = _D_channelModes.constBegin();
     while (D_iter != _D_channelModes.constEnd()) {
         D_modes += *D_iter;
-        D_iter++;
+        ++D_iter;
     }
     channelModes["D"] = D_modes;
 
@@ -379,21 +387,21 @@ void IrcChannel::initSetChanModes(const QVariantMap &channelModes)
     QVariantMap::const_iterator iterEnd = channelModes["A"].toMap().constEnd();
     while (iter != iterEnd) {
         _A_channelModes[iter.key()[0]] = iter.value().toStringList();
-        iter++;
+        ++iter;
     }
 
     iter = channelModes["B"].toMap().constBegin();
     iterEnd = channelModes["B"].toMap().constEnd();
     while (iter != iterEnd) {
         _B_channelModes[iter.key()[0]] = iter.value().toString();
-        iter++;
+        ++iter;
     }
 
     iter = channelModes["C"].toMap().constBegin();
     iterEnd = channelModes["C"].toMap().constEnd();
     while (iter != iterEnd) {
         _C_channelModes[iter.key()[0]] = iter.value().toString();
-        iter++;
+        ++iter;
     }
 
     QString D_modes = channelModes["D"].toString();
@@ -460,7 +468,7 @@ void IrcChannel::ircUserNickSet(QString nick)
  * C --> set value or remove
  * D --> on/off
  *
- * B and C behave very similar... we store the data in different datastructes
+ * B and C behave very similar... we store the data in different datastructures
  * for future compatibility
  ******************************************************************************/
 
@@ -588,21 +596,21 @@ QString IrcChannel::channelModeString() const
     QSet<QChar>::const_iterator D_iter = _D_channelModes.constBegin();
     while (D_iter != _D_channelModes.constEnd()) {
         modeString += *D_iter;
-        D_iter++;
+        ++D_iter;
     }
 
     QHash<QChar, QString>::const_iterator BC_iter = _C_channelModes.constBegin();
     while (BC_iter != _C_channelModes.constEnd()) {
         modeString += BC_iter.key();
         params << BC_iter.value();
-        BC_iter++;
+        ++BC_iter;
     }
 
     BC_iter = _B_channelModes.constBegin();
     while (BC_iter != _B_channelModes.constEnd()) {
         modeString += BC_iter.key();
         params << BC_iter.value();
-        BC_iter++;
+        ++BC_iter;
     }
     if (modeString.isEmpty())
         return modeString;

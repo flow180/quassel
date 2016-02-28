@@ -1,11 +1,11 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) version 3.                                           *
+ *   This file is free software; you can redistribute it and/or modify     *
+ *   it under the terms of the GNU Library General Public License (LGPL)   *
+ *   as published by the Free Software Foundation; either version 2 of the *
+ *   License, or (at your option) any later version.                       *
  *                                                                         *
  *   This program is distributed in the hope that it will be useful,       *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
@@ -29,7 +29,7 @@ LegacySystemTray::LegacySystemTray(QWidget *parent)
     _blinkState(false),
     _lastMessageId(0)
 {
-#ifndef HAVE_KDE
+#ifndef HAVE_KDE4
     _trayIcon = new QSystemTrayIcon(associatedWidget());
 #else
     _trayIcon = new KSystemTrayIcon(associatedWidget());
@@ -37,7 +37,7 @@ LegacySystemTray::LegacySystemTray(QWidget *parent)
     disconnect(_trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
         _trayIcon, SLOT(activateOrHide(QSystemTrayIcon::ActivationReason)));
 #endif
-#ifndef Q_WS_MAC
+#ifndef Q_OS_MAC
     connect(_trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
         SLOT(on_activated(QSystemTrayIcon::ActivationReason)));
 #endif
@@ -67,7 +67,7 @@ void LegacySystemTray::syncLegacyIcon()
 {
     _trayIcon->setIcon(stateIcon());
 
-#if defined Q_WS_MAC || defined Q_WS_WIN
+#if defined Q_OS_MAC || defined Q_OS_WIN
     QString tooltip = QString("%1").arg(toolTipTitle());
     if (!toolTipSubTitle().isEmpty())
         tooltip += QString("\n%1").arg(toolTipSubTitle());
@@ -142,7 +142,7 @@ void LegacySystemTray::setState(State state_)
 }
 
 
-Icon LegacySystemTray::stateIcon() const
+QIcon LegacySystemTray::stateIcon() const
 {
     if (mode() == Legacy && state() == NeedsAttention && !_blinkState)
         return SystemTray::stateIcon(Active);

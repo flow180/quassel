@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -26,6 +26,7 @@
 #include "corenetwork.h"
 #include "eventmanager.h"
 #include "ircevent.h"
+#include "ctcpevent.h"
 
 class CoreSession;
 class CtcpEvent;
@@ -63,6 +64,8 @@ protected:
         Message::Flags msgFlags = Message::None);
 
     void parse(IrcEventRawMessage *event, Message::Type msgType);
+    void parseSimple(IrcEventRawMessage *e, Message::Type messagetype, QByteArray dequotedMessage, CtcpEvent::CtcpType ctcptype, Message::Flags flags);
+    void parseStandard(IrcEventRawMessage *e, Message::Type messagetype, QByteArray dequotedMessage, CtcpEvent::CtcpType ctcptype, Message::Flags flags);
 
     QByteArray lowLevelQuote(const QByteArray &);
     QByteArray lowLevelDequote(const QByteArray &);
@@ -71,6 +74,9 @@ protected:
 
     QByteArray pack(const QByteArray &ctcpTag, const QByteArray &message);
     void packedReply(CoreNetwork *network, const QString &bufname, const QList<QByteArray> &replies);
+
+private slots:
+    void setStandardCtcp(bool enabled);
 
 private:
     inline QString targetDecode(IrcEventRawMessage *e, const QByteArray &msg) { return coreNetwork(e)->userDecode(e->target(), msg); }

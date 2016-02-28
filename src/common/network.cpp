@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -18,16 +18,13 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.         *
  ***************************************************************************/
 
-#include <QSettings>
 #include <QTextCodec>
 
 #include "network.h"
-#include "quassel.h"
 
 QTextCodec *Network::_defaultCodecForServer = 0;
 QTextCodec *Network::_defaultCodecForEncoding = 0;
 QTextCodec *Network::_defaultCodecForDecoding = 0;
-QString Network::_networksIniPath = QString();
 
 // ====================
 //  Public:
@@ -234,8 +231,12 @@ IrcUser *Network::newIrcUser(const QString &hostmask, const QVariantMap &initDat
 
         _ircUsers[nick] = ircuser;
 
-        SYNC_OTHER(addIrcUser, ARG(hostmask))
-        // emit ircUserAdded(hostmask);
+        // This method will be called with a nick instead of hostmask by setInitIrcUsersAndChannels().
+        // Not a problem because initData contains all we need; however, making sure here to get the real
+        // hostmask out of the IrcUser afterwards.
+        QString mask = ircuser->hostmask();
+        SYNC_OTHER(addIrcUser, ARG(mask));
+        // emit ircUserAdded(mask);
         emit ircUserAdded(ircuser);
     }
 
@@ -283,20 +284,6 @@ void Network::removeChansAndUsers()
     _ircUsers.clear();
     QList<IrcChannel *> channels = ircChannels();
     _ircChannels.clear();
-
-    foreach(IrcChannel *channel, channels) {
-        proxy()->detachObject(channel);
-        disconnect(channel, 0, this, 0);
-    }
-    foreach(IrcUser *user, users) {
-        proxy()->detachObject(user);
-        disconnect(user, 0, this, 0);
-    }
-
-    // the second loop is needed because quit can have sideffects
-    foreach(IrcUser *user, users) {
-        user->quit();
-    }
 
     qDeleteAll(users);
     qDeleteAll(channels);
@@ -465,7 +452,7 @@ QByteArray Network::encodeString(const QString &string) const
     if (_defaultCodecForEncoding) {
         return _defaultCodecForEncoding->fromUnicode(string);
     }
-    return string.toAscii();
+    return string.toLatin1();
 }
 
 
@@ -486,74 +473,7 @@ QByteArray Network::encodeServerString(const QString &string) const
     if (_defaultCodecForServer) {
         return _defaultCodecForServer->fromUnicode(string);
     }
-    return string.toAscii();
-}
-
-
-/*** Handle networks.ini ***/
-
-QStringList Network::presetNetworks(bool onlyDefault)
-{
-    // lazily find the file, make sure to not call one of the other preset functions first (they'll fail else)
-    if (_networksIniPath.isNull()) {
-        _networksIniPath = Quassel::findDataFilePath("networks.ini");
-        if (_networksIniPath.isNull()) {
-            _networksIniPath = ""; // now we won't check again, as it's not null anymore
-            return QStringList();
-        }
-    }
-    if (!_networksIniPath.isEmpty()) {
-        QSettings s(_networksIniPath, QSettings::IniFormat);
-        QStringList networks = s.childGroups();
-        if (!networks.isEmpty()) {
-            // we sort the list case-insensitive
-            QMap<QString, QString> sorted;
-            foreach(QString net, networks) {
-                if (onlyDefault && !s.value(QString("%1/Default").arg(net)).toBool())
-                    continue;
-                sorted[net.toLower()] = net;
-            }
-            return sorted.values();
-        }
-    }
-    return QStringList();
-}
-
-
-QStringList Network::presetDefaultChannels(const QString &networkName)
-{
-    if (_networksIniPath.isEmpty()) // be sure to have called presetNetworks() first, else this always fails
-        return QStringList();
-    QSettings s(_networksIniPath, QSettings::IniFormat);
-    return s.value(QString("%1/DefaultChannels").arg(networkName)).toStringList();
-}
-
-
-NetworkInfo Network::networkInfoFromPreset(const QString &networkName)
-{
-    NetworkInfo info;
-    if (!_networksIniPath.isEmpty()) {
-        info.networkName = networkName;
-        QSettings s(_networksIniPath, QSettings::IniFormat);
-        s.beginGroup(info.networkName);
-        foreach(QString server, s.value("Servers").toStringList()) {
-            bool ssl = false;
-            QStringList splitserver = server.split(':', QString::SkipEmptyParts);
-            if (splitserver.count() != 2) {
-                qWarning() << "Invalid server entry in networks.conf:" << server;
-                continue;
-            }
-            if (splitserver[1].at(0) == '+')
-                ssl = true;
-            uint port = splitserver[1].toUInt();
-            if (!port) {
-                qWarning() << "Invalid port entry in networks.conf:" << server;
-                continue;
-            }
-            info.serverList << Network::Server(splitserver[0].trimmed(), port, QString(), ssl);
-        }
-    }
-    return info;
+    return string.toLatin1();
 }
 
 
@@ -774,27 +694,54 @@ QVariantMap Network::initSupports() const
 }
 
 
+// There's potentially a lot of users and channels, so it makes sense to optimize the format of this.
+// Rather than sending a thousand maps with identical keys, we convert this into one map containing lists
+// where each list index corresponds to a particular IrcUser. This saves sending the key names a thousand times.
+// Benchmarks have shown space savings of around 56%, resulting in saving several MBs worth of data on sync
+// (without compression) with a decent amount of IrcUsers.
 QVariantMap Network::initIrcUsersAndChannels() const
 {
     QVariantMap usersAndChannels;
-    QVariantMap users;
-    QVariantMap channels;
 
-    QHash<QString, IrcUser *>::const_iterator userIter = _ircUsers.constBegin();
-    QHash<QString, IrcUser *>::const_iterator userIterEnd = _ircUsers.constEnd();
-    while (userIter != userIterEnd) {
-        users[userIter.value()->hostmask()] = userIter.value()->toVariantMap();
-        userIter++;
+    if (_ircUsers.count()) {
+        QHash<QString, QVariantList> users;
+        QHash<QString, IrcUser *>::const_iterator it = _ircUsers.begin();
+        QHash<QString, IrcUser *>::const_iterator end = _ircUsers.end();
+        while (it != end) {
+            const QVariantMap &map = it.value()->toVariantMap();
+            QVariantMap::const_iterator mapiter = map.begin();
+            while (mapiter != map.end()) {
+                users[mapiter.key()] << mapiter.value();
+                ++mapiter;
+            }
+            ++it;
+        }
+        // Can't have a container with a value type != QVariant in a QVariant :(
+        // However, working directly on a QVariantMap is awkward for appending, thus the detour via the hash above.
+        QVariantMap userMap;
+        foreach(const QString &key, users.keys())
+            userMap[key] = users[key];
+        usersAndChannels["Users"] = userMap;
     }
-    usersAndChannels["users"] = users;
 
-    QHash<QString, IrcChannel *>::const_iterator channelIter = _ircChannels.constBegin();
-    QHash<QString, IrcChannel *>::const_iterator channelIterEnd = _ircChannels.constEnd();
-    while (channelIter != channelIterEnd) {
-        channels[channelIter.value()->name()] = channelIter.value()->toVariantMap();
-        channelIter++;
+    if (_ircChannels.count()) {
+        QHash<QString, QVariantList> channels;
+        QHash<QString, IrcChannel *>::const_iterator it = _ircChannels.begin();
+        QHash<QString, IrcChannel *>::const_iterator end = _ircChannels.end();
+        while (it != end) {
+            const QVariantMap &map = it.value()->toVariantMap();
+            QVariantMap::const_iterator mapiter = map.begin();
+            while (mapiter != map.end()) {
+                channels[mapiter.key()] << mapiter.value();
+                ++mapiter;
+            }
+            ++it;
+        }
+        QVariantMap channelMap;
+        foreach(const QString &key, channels.keys())
+            channelMap[key] = channels[key];
+        usersAndChannels["Channels"] = channelMap;
     }
-    usersAndChannels["channels"] = channels;
 
     return usersAndChannels;
 }
@@ -804,24 +751,49 @@ void Network::initSetIrcUsersAndChannels(const QVariantMap &usersAndChannels)
 {
     Q_ASSERT(proxy());
     if (isInitialized()) {
-        qWarning() << "Network" << networkId() << "received init data for users and channels allthough there allready are known users or channels!";
+        qWarning() << "Network" << networkId() << "received init data for users and channels although there already are known users or channels!";
         return;
     }
 
-    QVariantMap users = usersAndChannels.value("users").toMap();
-    QVariantMap::const_iterator userIter = users.constBegin();
-    QVariantMap::const_iterator userIterEnd = users.constEnd();
-    while (userIter != userIterEnd) {
-        newIrcUser(userIter.key(), userIter.value().toMap());
-        userIter++;
+    // toMap() and toList() are cheap, so we can avoid copying to lists...
+    // However, we really have to make sure to never accidentally detach from the shared data!
+
+    const QVariantMap &users = usersAndChannels["Users"].toMap();
+
+    // sanity check
+    int count = users["nick"].toList().count();
+    foreach(const QString &key, users.keys()) {
+        if (users[key].toList().count() != count) {
+            qWarning() << "Received invalid usersAndChannels init data, sizes of attribute lists don't match!";
+            return;
+        }
     }
 
-    QVariantMap channels = usersAndChannels.value("channels").toMap();
-    QVariantMap::const_iterator channelIter = channels.constBegin();
-    QVariantMap::const_iterator channelIterEnd = channels.constEnd();
-    while (channelIter != channelIterEnd) {
-        newIrcChannel(channelIter.key(), channelIter.value().toMap());
-        channelIter++;
+    // now create the individual IrcUsers
+    for(int i = 0; i < count; i++) {
+        QVariantMap map;
+        foreach(const QString &key, users.keys())
+            map[key] = users[key].toList().at(i);
+        newIrcUser(map["nick"].toString(), map); // newIrcUser() properly handles the hostmask being just the nick
+    }
+
+    // same thing for IrcChannels
+    const QVariantMap &channels = usersAndChannels["Channels"].toMap();
+
+    // sanity check
+    count = channels["name"].toList().count();
+    foreach(const QString &key, channels.keys()) {
+        if (channels[key].toList().count() != count) {
+            qWarning() << "Received invalid usersAndChannels init data, sizes of attribute lists don't match!";
+            return;
+        }
+    }
+    // now create the individual IrcChannels
+    for(int i = 0; i < count; i++) {
+        QVariantMap map;
+        foreach(const QString &key, channels.keys())
+            map[key] = channels[key].toList().at(i);
+        newIrcChannel(map["name"].toString(), map);
     }
 }
 

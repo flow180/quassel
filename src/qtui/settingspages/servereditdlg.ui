@@ -144,16 +144,16 @@
          <item>
           <widget class="QComboBox" name="sslVersion">
            <property name="toolTip">
-            <string>Do not change unless you're going to connect to a server not supporting SSLv3!</string>
+            <string>Use only TLSv1 unless you know what you are doing!</string>
            </property>
            <item>
             <property name="text">
-             <string>SSLv3 (default)</string>
+             <string>SSLv3 (insecure)</string>
             </property>
            </item>
            <item>
             <property name="text">
-             <string>SSLv2</string>
+             <string>SSLv2 (insecure)</string>
             </property>
            </item>
            <item>

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -21,11 +21,7 @@
 #ifndef COREAPPLICATION_H_
 #define COREAPPLICATION_H_
 
-#ifdef HAVE_KDE
-#  include <KApplication>
-#else
-#  include <QCoreApplication>
-#endif
+#include <QCoreApplication>
 
 #include "quassel.h"
 

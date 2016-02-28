@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,25 +20,32 @@
 
 #include "identityeditwidget.h"
 
-#include <QDesktopServices>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
+#include <QIcon>
+#include <QMimeData>
 #include <QUrl>
+#include <QMessageBox>
+
+#if QT_VERSION < 0x050000
+#  include <QDesktopServices>
+#else
+#  include <QStandardPaths>
+#endif
 
 #include "client.h"
-#include "iconloader.h"
 
 IdentityEditWidget::IdentityEditWidget(QWidget *parent)
     : QWidget(parent)
 {
     ui.setupUi(this);
 
-    ui.addNick->setIcon(SmallIcon("list-add"));
-    ui.deleteNick->setIcon(SmallIcon("edit-delete"));
-    ui.renameNick->setIcon(SmallIcon("edit-rename"));
-    ui.nickUp->setIcon(SmallIcon("go-up"));
-    ui.nickDown->setIcon(SmallIcon("go-down"));
+    ui.addNick->setIcon(QIcon::fromTheme("list-add"));
+    ui.deleteNick->setIcon(QIcon::fromTheme("edit-delete"));
+    ui.renameNick->setIcon(QIcon::fromTheme("edit-rename"));
+    ui.nickUp->setIcon(QIcon::fromTheme("go-up"));
+    ui.nickDown->setIcon(QIcon::fromTheme("go-down"));
 
     // We need to know whenever the state of input widgets changes...
     connect(ui.realName, SIGNAL(textEdited(const QString &)), this, SIGNAL(widgetHasChanged()));
@@ -299,7 +306,7 @@ void IdentityEditWidget::sslDropEvent(QDropEvent *event, bool isCert)
 
     if (isCert) {
         QSslCertificate cert = certByFilename(filename);
-        if (cert.isValid())
+        if (!cert.isNull())
             showCertState(cert);
     }
     else {
@@ -317,7 +324,12 @@ void IdentityEditWidget::on_clearOrLoadKeyButton_clicked()
     QSslKey key;
 
     if (ui.keyTypeLabel->property("sslKey").toByteArray().isEmpty())
-        key = keyByFilename(QFileDialog::getOpenFileName(this, tr("Load a Key"), QDesktopServices::storageLocation(QDesktopServices::HomeLocation)));
+        key = keyByFilename(QFileDialog::getOpenFileName(this, tr("Load a Key"),
+#if QT_VERSION < 0x050000
+                                                         QDesktopServices::storageLocation(QDesktopServices::HomeLocation)));
+#else
+                                                         QStandardPaths::writableLocation(QStandardPaths::HomeLocation)));
+#endif
 
     showKeyState(key);
     emit widgetHasChanged();
@@ -340,6 +352,7 @@ QSslKey IdentityEditWidget::keyByFilename(const QString &filename)
                 goto returnKey;
         }
     }
+    QMessageBox::information(this, tr("Failed to read key"), tr("Failed to read the key file. It is either incompatible or invalid. Note that the key file must not have a passphrase."));
 returnKey:
     return key;
 }
@@ -374,8 +387,12 @@ void IdentityEditWidget::on_clearOrLoadCertButton_clicked()
     QSslCertificate cert;
 
     if (ui.certOrgLabel->property("sslCert").toByteArray().isEmpty())
-        cert = certByFilename(QFileDialog::getOpenFileName(this, tr("Load a Certificate"), QDesktopServices::storageLocation(QDesktopServices::HomeLocation)));
-
+        cert = certByFilename(QFileDialog::getOpenFileName(this, tr("Load a Certificate"),
+#if QT_VERSION < 0x050000
+                                                           QDesktopServices::storageLocation(QDesktopServices::HomeLocation)));
+#else
+                                                           QStandardPaths::writableLocation(QStandardPaths::HomeLocation)));
+#endif
     showCertState(cert);
     emit widgetHasChanged();
 }
@@ -391,7 +408,7 @@ QSslCertificate IdentityEditWidget::certByFilename(const QString &filename)
 
     for (int i = 0; i < 2; i++) {
         cert = QSslCertificate(certRaw, (QSsl::EncodingFormat)i);
-        if (cert.isValid())
+        if (!cert.isNull())
             break;
     }
     return cert;
@@ -400,14 +417,19 @@ QSslCertificate IdentityEditWidget::certByFilename(const QString &filename)
 
 void IdentityEditWidget::showCertState(const QSslCertificate &cert)
 {
-    if (!cert.isValid()) {
+    if (cert.isNull()) {
         ui.certOrgLabel->setText(tr("No Certificate loaded"));
         ui.certCNameLabel->setText(tr("No Certificate loaded"));
         ui.clearOrLoadCertButton->setText(tr("Load"));
     }
     else {
+#if QT_VERSION < 0x050000
         ui.certOrgLabel->setText(cert.subjectInfo(QSslCertificate::Organization));
         ui.certCNameLabel->setText(cert.subjectInfo(QSslCertificate::CommonName));
+#else
+        ui.certOrgLabel->setText(cert.subjectInfo(QSslCertificate::Organization).join(", "));
+        ui.certCNameLabel->setText(cert.subjectInfo(QSslCertificate::CommonName).join(", "));
+#endif
         ui.clearOrLoadCertButton->setText(tr("Clear"));
     }
     ui.certOrgLabel->setProperty("sslCert", cert.toPem());

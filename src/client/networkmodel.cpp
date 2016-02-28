@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005-2013 by the Quassel Project                        *
+ *   Copyright (C) 2005-2015 by the Quassel Project                        *
  *   devel@quassel-irc.org                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -22,7 +22,9 @@
 
 #include <QAbstractItemView>
 #include <QMimeData>
+#if QT_VERSION < 0x050000
 #include <QTextDocument>        // for Qt::escape()
+#endif
 
 #include "buffermodel.h"
 #include "buffersettings.h"
@@ -153,7 +155,7 @@ void NetworkItem::attachNetwork(Network *network)
     connect(network, SIGNAL(connectedSet(bool)),
         this, SIGNAL(networkDataChanged()));
     connect(network, SIGNAL(destroyed()),
-        this, SIGNAL(networkDataChanged()));
+        this, SLOT(onNetworkDestroyed()));
 
     emit networkDataChanged();
 }
@@ -209,8 +211,13 @@ QString NetworkItem::toolTip(int column) const
 {
     Q_UNUSED(column);
 
+#if QT_VERSION < 0x050000
     QStringList toolTip(QString("<b>%1</b>").arg(Qt::escape(networkName())));
     toolTip.append(tr("Server: %1").arg(Qt::escape(currentServer())));
+#else
+    QStringList toolTip(QString("<b>%1</b>").arg(networkName().toHtmlEscaped()));
+    toolTip.append(tr("Server: %1").arg(currentServer().toHtmlEscaped()));
+#endif
     toolTip.append(tr("Users: %1").arg(nickCount()));
 
     if (_network) {
@@ -230,6 +237,14 @@ void NetworkItem::onBeginRemoveChilds(int start, int end)
             break;
         }
     }
+}
+
+
+void NetworkItem::onNetworkDestroyed()
+{
+    _network = 0;
+    emit networkDataChanged();
+    removeAllChilds();
 }
 
 
@@ -448,6 +463,12 @@ bool QueryBufferItem::setData(int column, const QVariant &value, int role)
     case Qt::EditRole:
     {
         QString newName = value.toString();
+
+        // Sanity check - buffer names must not contain newlines!
+        int nlpos = newName.indexOf('\n');
+        if (nlpos >= 0)
+            newName = newName.left(nlpos);
+
         if (!newName.isEmpty()) {
             Client::renameBuffer(bufferId(), newName);
             return true;
@@ -520,8 +541,10 @@ void QueryBufferItem::setIrcUser(IrcUser *ircUser)
     }
 
     if (ircUser) {
+        connect(ircUser, SIGNAL(destroyed(QObject*)), SLOT(removeIrcUser()));
         connect(ircUser, SIGNAL(quited()), this, SLOT(removeIrcUser()));
         connect(ircUser, SIGNAL(awaySet(bool)), this, SIGNAL(dataChanged()));
+        connect(ircUser, SIGNAL(encryptedSet(bool)), this, SLOT(setEncrypted(bool)));
     }
 
     _ircUser = ircUser;
@@ -562,7 +585,11 @@ QString ChannelBufferItem::toolTip(int column) const
     Q_UNUSED(column);
     QStringList toolTip;
 
+#if QT_VERSION < 0x050000
     toolTip.append(tr("<b>Channel %1</b>").arg(Qt::escape(bufferName())));
+#else
+    toolTip.append(tr("<b>Channel %1</b>").arg(bufferName().toHtmlEscaped()));
+#endif
     if (isActive()) {
         //TODO: add channel modes
         toolTip.append(tr("<b>Users:</b> %1").arg(nickCount()));
@@ -578,7 +605,11 @@ QString ChannelBufferItem::toolTip(int column) const
             QString _topic = topic();
             if (_topic != "") {
                 _topic = stripFormatCodes(_topic);
+#if QT_VERSION < 0x050000
                 _topic = Qt::escape(_topic);
+#else
+                _topic = _topic.toHtmlEscaped();
+#endif
                 toolTip.append(QString("<font size='-2'>&nbsp;</font>"));
                 toolTip.append(tr("<b>Topic:</b> %1").arg(_topic));
             }
@@ -594,12 +625,19 @@ QString ChannelBufferItem::toolTip(int column) const
 
 void ChannelBufferItem::attachIrcChannel(IrcChannel *ircChannel)
 {
-    Q_ASSERT(!_ircChannel && ircChannel);
+    if (_ircChannel) {
+        qWarning() << Q_FUNC_INFO << "IrcChannel already set; cleanup failed!?";
+        disconnect(_ircChannel, 0, this, 0);
+    }
 
     _ircChannel = ircChannel;
 
+    connect(ircChannel, SIGNAL(destroyed(QObject*)),
+        this, SLOT(ircChannelDestroyed()));
     connect(ircChannel, SIGNAL(topicSet(QString)),
         this, SLOT(setTopic(QString)));
+    connect(ircChannel, SIGNAL(encryptedSet(bool)),
+        this, SLOT(setEncrypted(bool)));
     connect(ircChannel, SIGNAL(ircUsersJoined(QList<IrcUser *> )),
         this, SLOT(join(QList<IrcUser *> )));
     connect(ircChannel, SIGNAL(ircUserParted(IrcUser *)),
@@ -627,6 +665,16 @@ void ChannelBufferItem::ircChannelParted()
     _ircChannel = 0;
     emit dataChanged();
     removeAllChilds();
+}
+
+
+void ChannelBufferItem::ircChannelDestroyed()
+{
+    if (_ircChannel) {
+        _ircChannel = 0;
+        emit dataChanged();
+        removeAllChilds();
+    }
 }
 
 
@@ -681,7 +729,7 @@ void ChannelBufferItem::addUsersToCategory(const QList<IrcUser *> &ircUsers)
     QHash<UserCategoryItem *, QList<IrcUser *> >::const_iterator catIter = categories.constBegin();
     while (catIter != categories.constEnd()) {
         catIter.key()->addUsers(catIter.value());
-        catIter++;
+        ++catIter;
     }
 }
 
@@ -1075,7 +1123,7 @@ QList<QPair<NetworkId, BufferId> > NetworkModel::mimeDataToBufferList(const QMim
     if (!mimeContainsBufferList(mimeData))
         return bufferList;
 
-    QStringList rawBufferList = QString::fromAscii(mimeData->data("application/Quassel/BufferItemList")).split(",");
+    QStringList rawBufferList = QString::fromLatin1(mimeData->data("application/Quassel/BufferItemList")).split(",");
     NetworkId networkId;
     BufferId bufferUid;
     foreach(QString rawBuffer, rawBufferList) {
@@ -1103,7 +1151,7 @@ QMimeData *NetworkModel::mimeData(const QModelIndexList &indexes) const
             bufferlist << bufferid;
     }
 
-    mimeData->setData("application/Quassel/BufferItemList", bufferlist.join(",").toAscii());
+    mimeData->setData("application/Quassel/BufferItemList", bufferlist.join(",").toLatin1());
 
     return mimeData;
 }
@@ -1237,7 +1285,8 @@ void NetworkModel::updateBufferActivity(Message &msg)
         }
     }
     else {
-        updateBufferActivity(bufferItem(msg.bufferInfo()), msg);
+        if ((BufferSettings(msg.bufferId()).messageFilter() & msg.type()) != msg.type())
+            updateBufferActivity(bufferItem(msg.bufferInfo()), msg);
     }
 }
 
