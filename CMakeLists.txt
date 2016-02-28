@@ -605,7 +605,7 @@ add_subdirectory(icons)
 add_subdirectory(pics)
 add_subdirectory(po)
 
-find_package(Ldap)
+find_package(Ldap REQUIRED)
 set(HAVE_LDAP true)
 
 # Set up and display feature summary
